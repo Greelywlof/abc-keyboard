@@ -52,7 +52,24 @@ function restClips(n) {
   return ['zh_rest', 'zh_today', n <= 50 ? `zh_n_${n}` : 'zh_many', 'zh_words_end'];
 }
 
+// 男声分等级夸奖：95+ Excellent，90+ Very good，80+ Good job，60+ Nice try，再低 Let's try again
+const maleClip = t => (t >= 95 ? 'm_excellent' : t >= 90 ? 'm_verygood' : t >= 80 ? 'm_good' : t >= 60 ? 'm_nicetry' : 'm_tryagain');
+
+// 复习：上一次（今天以前最近一天）拼对过的单词，随机抽最多 3 个，返回 [{L,i}]
+function reviewWords(archive, todayKey) {
+  const wd = (archive && archive.wordDays) || {};
+  const last = Object.keys(wd).filter(d => d < todayKey && (wd[d] || []).length).sort().pop();
+  if (!last) return [];
+  const pos = {}; LETTERS.forEach(L => DATA[L].forEach(([w], i) => { pos[w] = { L, i }; }));
+  return wd[last].filter(w => pos[w] && SPELL.some(p => p.L === pos[w].L && p.i === pos[w].i))
+    .sort(() => Math.random() - 0.5).slice(0, 3).map(w => pos[w]);
+}
+function spellFrom(p) {
+  const [word, emoji, cn] = DATA[p.L][p.i];
+  return { word, upper: word.toUpperCase(), emoji, cn, clip: `w_${p.L}${p.i}`, pos: 0, color: color() };
+}
+
 // 单词读音对应的中文意思：w_C0（Cat）→ c_C0（猫）
 const cnClip = w => (/^w_[A-Z]\d$/.test(w) ? 'c_' + w.slice(2) : null);
 
-module.exports = { cnClip, restClips, DATA, LETTERS, SPELL, NUM_WORDS, NUM_CN, PRAISE_N, color, rand, split, splitPart, pickTarget, pickSpell, tiles, keyRows };
+module.exports = { maleClip, reviewWords, spellFrom, cnClip, restClips, DATA, LETTERS, SPELL, NUM_WORDS, NUM_CN, PRAISE_N, color, rand, split, splitPart, pickTarget, pickSpell, tiles, keyRows };

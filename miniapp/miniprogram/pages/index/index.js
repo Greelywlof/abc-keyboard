@@ -8,6 +8,7 @@ const { EVAL_PER_DAY, AUDIO_BASE } = require('../../config');
 
 const empty = { pre: '', hl: '', post: '' };
 let idx = {}, target = null, spell = null, cur = {}, busy = false, recBusy = false, timer = null, hintTimer = null, warned1 = false, spellTok = 0, micOff = false;
+let reviewQ = [], reviewing = false;
 
 Page({
   data: {
@@ -31,6 +32,9 @@ Page({
     this.setData({ started: true });
     this.checkRest();
     if (this.data.resting) return;
+    // 每天第一次打开：有上次学过的单词就先复习，直接进拼单词
+    reviewQ = stats.today().reviewed ? [] : G.reviewWords(stats.getArchive(), stats.dayKey());
+    if (reviewQ.length) { this.setData({ mode: 'spell', tiles: [], result: null }); this.newSpell(); return; }
     this.freePress('A');
     setTimeout(() => { if (this.data.mode === 'free') sound.play(['zh_free']); }, 2600);
   },
@@ -116,17 +120,25 @@ Page({
   // ---------- 拼单词 ----------
   // 顺序「读 → 拼 → 读」（11-16 用户定）：先听示范、自己读一遍（只鼓励不打分），再拼，拼完再读一遍打分
   newSpell() {
-    spell = G.pickSpell(spell && spell.clip);
+    // 每天第一次打开先复习上次学过的单词（最多 3 个），复习完再学新单词
+    let lead = [];
+    if (reviewQ.length) {
+      if (!reviewing) { reviewing = true; lead = ['zh_review']; }
+      spell = G.spellFrom(reviewQ.shift());
+    } else {
+      if (reviewing) { reviewing = false; stats.today().reviewed = true; stats.save(); lead = ['zh_reviewdone']; }
+      spell = G.pickSpell(spell && spell.clip);
+    }
     cur = { word: spell.word, w: spell.clip };
     busy = true; // 先读：示范和跟读时键盘不响应
     // 先读的时候格子都不跳、键都不亮
-    this.setData({ letter: '', pic: spell.emoji, parts: empty, cn: spell.cn, prompt: '🔊 听一听，跟我读！', tiles: G.tiles(Object.assign({}, spell, { pos: -1 }), this.data.upper), keys: G.keyRows(this.data.upper, ''), pop: this.data.pop + 1, mic: 'hide', result: null });
-    this.spellIntro(++spellTok);
+    this.setData({ letter: '', pic: spell.emoji, parts: empty, cn: spell.cn, prompt: reviewing ? '🔁 复习：听一听，跟我读！' : '🔊 听一听，跟我读！', tiles: G.tiles(Object.assign({}, spell, { pos: -1 }), this.data.upper), keys: G.keyRows(this.data.upper, ''), pop: this.data.pop + 1, mic: 'hide', result: null });
+    this.spellIntro(++spellTok, lead);
   },
   spellAlive(tok) { return tok === spellTok && this.data.mode === 'spell' && !this.data.resting; },
-  async spellIntro(tok) {
+  async spellIntro(tok, lead = []) {
     const clip = spell.clip, cnc = G.cnClip(clip);
-    await sound.play(['zh_follow', clip, cnc], 0.85);
+    await sound.play([...lead, 'zh_follow', clip, cnc], 0.85);
     if (!this.spellAlive(tok)) return;
     if (await this.micReady()) {
       await sound.play(['zh_yourturn']);
@@ -245,8 +257,9 @@ Page({
     const weakPart = r.weak ? G.splitPart(word, r.weak.letter) : empty;
     this.setData({ result: { level: r.level, starsTxt: '⭐'.repeat(starsN) + '☆'.repeat(3 - starsN), part: weakPart }, stars: this.data.stars + Math.max(1, starsN) });
     if (r.level === 0) return sound.play(['zh_noheard']);
-    if (r.level === 3) return sound.play(['zh_ye_crowd', 'zh_score3']);
-    await sound.play([r.level === 2 ? 'zh_score2' : 'zh_score1']);
+    const male = G.maleClip(r.total); // 男声分等级夸奖
+    if (r.level === 3) return sound.play(['zh_ye_crowd', male, 'zh_score3']);
+    await sound.play([male, r.level === 2 ? 'zh_score2' : 'zh_score1']);
     // 纠音：有对应字母就把那个字母标红，再慢慢放一遍示范
     if (weakPart.hl) await sound.play(['zh_listenpart']);
     await sound.play([clip], 0.75);

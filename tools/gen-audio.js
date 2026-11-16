@@ -49,12 +49,13 @@ async function post(p, body) {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const VOICE_ZH = process.env.MINIMAX_VOICE_ZH || 'female-tianmei';
-async function synth(text, zh) {
+const VOICE_MALE = process.env.MINIMAX_VOICE_MALE || 'English_Trustworthy_Man';
+async function synth(text, zh, male) {
   for (let i = 0; i < 4; i++) {
     try {
       const j = await post('/v1/t2a_v2', {
         model: MODEL, text, stream: false, language_boost: zh ? 'Chinese' : 'English', output_format: 'hex',
-        voice_setting: { voice_id: zh ? VOICE_ZH : VOICE, speed: SPEED, vol: 1, pitch: 0 },
+        voice_setting: Object.assign({ voice_id: male ? VOICE_MALE : zh ? VOICE_ZH : VOICE, speed: male ? 1 : SPEED, vol: 1, pitch: 0 }, male ? { emotion: 'happy' } : {}),
         audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 },
       });
       return Buffer.from(j.data.audio, 'hex');
@@ -111,6 +112,15 @@ function clips() {
   c.zh_medal_silver = '你得到了一枚银牌！真棒！';
   c.zh_medal_bronze = '你得到了一枚铜牌！明天继续加油！';
   c.zh_newbadge = '还得到了一个新徽章！';
+  // 跟读分数的男声夸奖（11-16 用户要：分等级，90 分以上 very good / excellent）
+  c.m_excellent = 'Excellent!';
+  c.m_verygood = 'Very good!';
+  c.m_good = 'Good job!';
+  c.m_nicetry = 'Nice try!';
+  c.m_tryagain = "Let's try again!";
+  // 第二天先复习上次学过的单词
+  c.zh_review = '我们先复习一下上次学过的单词！';
+  c.zh_reviewdone = '复习完啦，现在来学新单词！';
   // 休息页把统计也读出来：「今天你拼对了」+ 数字 +「个单词，真棒！」（孩子不认字，屏幕上的字都要能听到）
   c.zh_today = '今天你拼对了';
   c.zh_words_end = '个单词，真棒！';
@@ -134,7 +144,7 @@ function clips() {
   for (const [name, text] of all) {
     const f = path.join(OUT, name + '.mp3');
     if (!force && fs.existsSync(f)) { skipped++; continue; }
-    fs.writeFileSync(f, await synth(text, name.startsWith('zh_') || name.startsWith('c_')));
+    fs.writeFileSync(f, await synth(text, name.startsWith('zh_') || name.startsWith('c_'), name.startsWith('m_')));
     made++; process.stdout.write(`\r${made + skipped}/${all.length} ${name}            `);
   }
   console.log(`\n完成：新生成 ${made} 个，跳过 ${skipped} 个。音色 ${VOICE}，模型 ${MODEL}`);

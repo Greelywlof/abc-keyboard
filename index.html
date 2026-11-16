@@ -219,6 +219,8 @@
       <h3>📚 学会的单词（拼对过的）</h3>
       <div class="learned" id="aWords"></div>
       <p class="muted">每天一枚奖牌：来玩就有 🥉；拼对 3 个单词或跟读 5 次 🥈；拼对 6 个并跟读 6 次 🥇。档案存在这台设备的浏览器里，长期保留。</p>
+      <h3>🔈 声音</h3>
+      <div class="limits" id="pVoice"></div>
       <h3>⏱ 每天能玩多久</h3>
       <div id="pLimit"></div>
       <p class="muted">到时间后会出现休息页，键盘不再响应。时间按页面打开且在前台的时长算，记在这台设备的浏览器里。</p>
@@ -316,35 +318,76 @@ const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一�
 const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "")   // 数字直接给浏览器读
   || (/^c_[A-Z]\d$/.test(c) ? DATA[c[2]][+c[3]][2] : "");                 // 单词的中文意思
 const cnClip = w => /^w_[A-Z]\d$/.test(w) ? "c_" + w.slice(2) : null;     // w_C0 → c_C0（Cat → 猫）
-// 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
-let playing=null, playToken=0;
-// 返回一个 Promise：整串播完（或被新的一句打断）时结束，跟读要等示范读完再录
+// ---------- 声音：一个声音通道（Web Audio），点「开始玩」时打开 ----------
+// 11-16 手机 / 平板浏览器实测问题：每句新建一个 <audio> 连播，第二句起会被浏览器当成「没点就自动出声」拦掉，
+// 拼单词开头的示范全被跳过。改成在开始时点一下就打开一个通道，之后所有语音都从这个通道放；语音提前下载解码好。
+let actx=null;
+function audioCtx(){ if (!actx) actx = new (window.AudioContext||window.webkitAudioContext)(); return actx; }
+function unlockAudio(){   // 必须在用户点击里调用
+  const c = audioCtx();
+  if (c.state !== "running") c.resume();
+  try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch(e){}
+}
+// 声音包：设置里可以换（家长面板「🔈 声音」）；男声夸奖、群喊「耶」各声音包共用
+const VOICE_PACKS = [{ id: "sweet", name: "甜美女声（原来的）", dir: "audio/" }];
+const SHARED = c => /^m_/.test(c) || c === "zh_ye_crowd";
+let voicePack = (() => { try { return localStorage.getItem("abc_voice") || VOICE_PACKS[0].id; } catch(e){ return VOICE_PACKS[0].id; } })();
+const clipUrl = c => (SHARED(c) ? "audio/" : (VOICE_PACKS.find(p => p.id === voicePack) || VOICE_PACKS[0]).dir) + c + ".mp3";
+const bufCache = new Map();
+function loadClip(c){
+  const url = clipUrl(c);
+  if (!bufCache.has(url)) bufCache.set(url, fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(b => new Promise((res, rej) => audioCtx().decodeAudioData(b, res, rej)))
+    .catch(e => { bufCache.delete(url); throw e; }));
+  return bufCache.get(url);
+}
+function prefetch(list){ list.filter(Boolean).forEach(c => loadClip(c).catch(()=>{})); }
+let current=null, playToken=0;
+function stopAudio(){ if (current){ try { current.onended = null; current.stop(); } catch(e){} current = null; } }
+// 放一段解码好的声音，放完 resolve
+function playBuf(buf){
+  return new Promise(res => {
+    const s = audioCtx().createBufferSource(); s.buffer = buf; s.connect(audioCtx().destination);
+    s.onended = () => { if (current === s) current = null; res(); };
+    current = s; s.start(0);
+  });
+}
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+// 连播几段 mp3；某段下载不到（或网络很慢）就用浏览器语音读 text。返回 Promise：整串播完（或被新的一句打断）时结束
 function say(clips, text, rate){
-  return new Promise(resolve=>{
+  return new Promise(async resolve=>{
     let finished=false; const fin=()=>{ if(!finished){ finished=true; resolve(); } };
     if (muted) return fin();
     const token=++playToken;
-    if (playing){ playing.pause(); playing=null; }
+    stopAudio();
     if ("speechSynthesis" in window) speechSynthesis.cancel();
-    let i=0, fell=false;
     clips = clips.filter(Boolean);
-    const zh = clips.map(zhText).join("");
-    const zhAfter = clips.length > 0 && !zhText(clips[0]);   // 第一段是英文，中文就放后面读
-    const fallback=()=>{ if (fell || token!==playToken) return fin(); fell=true; speak(text, rate, zh, fin, zhAfter); };
-    const next=()=>{
-      if (token!==playToken || i>=clips.length) return fin();
-      const a=new Audio(`audio/${clips[i++]}.mp3`);
-      playing=a; a.onended=next; a.onerror=fallback;
-      a.play().catch(fallback);
-    };
-    next();
+    prefetch(clips);   // 这一串同时开始下载，放第一句时后面的也在路上了
+    try {
+      for (const c of clips){
+        const buf = await withTimeout(loadClip(c), 8000);
+        if (token !== playToken || muted) return fin();
+        await playBuf(buf);
+        if (token !== playToken) return fin();
+      }
+      fin();
+    } catch(e){
+      if (token !== playToken) return fin();
+      const zh = clips.map(zhText).join("");
+      const zhAfter = clips.length > 0 && !zhText(clips[0]);   // 第一段是英文，中文就放后面读
+      speak(text, rate, zh, fin, zhAfter);
+    }
   });
 }
-let actx=null;
+// 放她自己的录音（也走同一个通道）
+async function playBlob(blob){
+  if (muted) return;
+  try { const buf = await new Promise(async (res, rej) => audioCtx().decodeAudioData(await blob.arrayBuffer(), res, rej)); stopAudio(); await playBuf(buf); } catch(e){}
+}
 function beep(freq=660, dur=.12, type="sine"){
   if (muted) return;
   try{
-    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    audioCtx();
     const o=actx.createOscillator(), g=actx.createGain();
     o.type=type; o.frequency.value=freq; g.gain.value=.15;
     g.gain.exponentialRampToValueAtTime(.001, actx.currentTime+dur);
@@ -454,25 +497,44 @@ const SPELL = [];
 for (const L of LETTERS) DATA[L].forEach(([w],i)=>{ if (/^[A-Za-z]+$/.test(w) && w.length<=6) SPELL.push({L,i}); });
 const tilesEl=$("tiles");
 let spell=null; // {word, emoji, cn, clip, pos}
+// ---------- 复习：每天第一次打开，先抽查上一次学过的单词（最多 3 个），再学新单词（11-16 用户定） ----------
+const WORD_POS = {}; LETTERS.forEach(L => DATA[L].forEach(([w], i) => { WORD_POS[w] = { L, i }; }));
+let reviewQ = [], reviewing = false;
+function buildReview(){
+  if (today().reviewed) return [];
+  const k = dayKey();
+  const lastDay = Object.keys(archive.wordDays || {}).filter(d => d < k && (archive.wordDays[d] || []).length).sort().pop();
+  if (!lastDay) return [];
+  const words = archive.wordDays[lastDay].filter(w => WORD_POS[w] && SPELL.some(p => p.L === WORD_POS[w].L && p.i === WORD_POS[w].i));
+  return words.sort(() => Math.random() - .5).slice(0, 3).map(w => WORD_POS[w]);
+}
 function newSpell(){
   clearHint(); picEl.style.fontSize="";
-  let p; do { p = SPELL[Math.floor(Math.random()*SPELL.length)]; } while (spell && spell.clip===`w_${p.L}${p.i}`);
+  let p, lead = [];
+  if (reviewQ.length){
+    if (!reviewing){ reviewing = true; lead = ["zh_review"]; }   // 「我们先复习一下上次学过的单词！」
+    p = reviewQ.shift();
+  } else {
+    if (reviewing){ reviewing = false; today().reviewed = true; saveStats(); lead = ["zh_reviewdone"]; }   // 「复习完啦，现在来学新单词！」
+    do { p = SPELL[Math.floor(Math.random()*SPELL.length)]; } while (spell && spell.clip===`w_${p.L}${p.i}`);
+  }
   const [word, emoji, cn] = DATA[p.L][p.i];
-  spell = {word:word.toUpperCase(), emoji, cn, clip:`w_${p.L}${p.i}`, pos:0, color:COLORS[Math.floor(Math.random()*COLORS.length)]};
+  spell = {word:word.toUpperCase(), emoji, cn, clip:`w_${p.L}${p.i}`, pos:0, color:COLORS[Math.floor(Math.random()*COLORS.length)], review: reviewing};
   cur = {L:null, word, w:spell.clip};
   letterEl.textContent=""; picEl.textContent=emoji; wordEl.textContent=""; cnEl.textContent=cn;
-  promptEl.textContent="🔊 听一听，跟我读！";
+  promptEl.textContent = reviewing ? "🔁 复习：听一听，跟我读！" : "🔊 听一听，跟我读！";
   restart(picEl,"pop");
   busy = true;                 // 先读：示范和跟读的时候键盘不响应
   drawTiles(); clearHint(); updateMic();
-  spellIntro(++spellTok);
+  spellIntro(++spellTok, lead);   // 先开始放（开头几句优先下载），再预加载后面要用的
+  setTimeout(() => prefetch(["zh_yourturn", "zh_goodtry", "zh_spell", ...[...spell.word].map(c => `l_${c}`), "zh_readagain"]), 300);
 }
 // 顺序「读 → 拼 → 读」（11-16 用户定）：先听示范、自己读一遍（只鼓励不打分），再拼，拼完再读一遍打分
 let spellTok = 0;
 const spellAlive = tok => tok === spellTok && mode === "spell" && !resting;
-async function spellIntro(tok){
+async function spellIntro(tok, lead = []){
   const s = spell, word = cur.word;
-  await say(["zh_follow", s.clip, cnClip(s.clip)], word, .7);   // 听示范，接着说中文意思
+  await say([...lead, "zh_follow", s.clip, cnClip(s.clip)], word, .7);   // （复习提示）+ 听示范，接着说中文意思
   if (!spellAlive(tok)) return;
   if (canRec()){
     await say(["zh_yourturn"], "");
@@ -529,7 +591,8 @@ function drawTiles(){
   if (spell.pos<spell.word.length) hint(spell.word[spell.pos]);  // 下一个要敲的键一直亮着
 }
 function spellPress(L){
-  if (busy || !spell) return;
+  if (!spell) return;
+  if (busy){ beep(260, .08, "sine"); return; }   // 还在听示范 / 跟读：轻轻「嘟」一声表示等一下，不算数
   const need = spell.word[spell.pos];
   if (L!==need){
     restart(tilesEl,"shake"); beep(300,.15,"sine");
@@ -709,7 +772,7 @@ async function followMe(){
     const scoring = scoreIt(blob, word);   // 一边回放一边去打分
     const url = recs[0].url;
     await say(["zh_hear"], "");
-    if (!muted) await new Promise(r => { const a = new Audio(url); a.onended = r; a.onerror = r; a.play().catch(r); });
+    await playBlob(blob);
     const res = await scoring;
     micBtn.textContent = "🎤 跟我读";
     recs[0].score = res;
@@ -779,6 +842,8 @@ async function scoreIt(blob, word){
   }
 }
 const scoreEl = $("score");
+// 男声分等级（11-16 用户要）：95+ Excellent，90+ Very good，80+ Good job，60+ Nice try，再低 Let's try again
+const maleClip = t => t >= 95 ? "m_excellent" : t >= 90 ? "m_verygood" : t >= 80 ? "m_good" : t >= 60 ? "m_nicetry" : "m_tryagain";
 // 显示星星、分数，没读准的字母标红；配中文语音鼓励，再（放慢）放一遍示范
 async function showScore(r, word, clip){
   if (!r || r.error){
@@ -795,8 +860,9 @@ async function showScore(r, word, clip){
   const i = l ? word.toLowerCase().indexOf(l) : -1;
   if (lv && lv < 3 && i >= 0) wordEl.innerHTML = `${word.slice(0,i)}<b class="weak">${word.slice(i, i + l.length)}</b>${word.slice(i + l.length)}`;
   if (lv === 0) return say(["zh_noheard"], "");
-  if (lv === 3){ chime(); confetti(14); return say(["zh_ye_crowd", "zh_score3"], ""); }
-  await say([lv === 2 ? "zh_score2" : "zh_score1"], "");
+  const male = maleClip(r.total);   // 男声分等级夸奖
+  if (lv === 3){ chime(); confetti(14); return say(["zh_ye_crowd", male, "zh_score3"], ""); }
+  await say([male, lv === 2 ? "zh_score2" : "zh_score1"], "");
   if (i >= 0) await say(["zh_listenpart"], "");
   await say([clip], word, .6);
 }
@@ -828,6 +894,12 @@ function renderParent(){
       <button class="tab" id="plus5">今天再加 5 分钟</button></div>`;
   $("pLimit").querySelectorAll("[data-lim]").forEach(b => b.onclick = () => { limitMin = +b.dataset.lim; store.set("abc_limit", limitMin); renderParent(); });
   $("plus5").onclick = () => { today().extra += 5; saveStats(); renderParent(); };
+  // 声音包：点一下换，并试听一句
+  $("pVoice").innerHTML = VOICE_PACKS.map(p => `<button class="tab${p.id===voicePack?" on":""}" data-voice="${p.id}">${p.name}</button>`).join("");
+  $("pVoice").querySelectorAll("[data-voice]").forEach(b => b.onclick = () => {
+    voicePack = b.dataset.voice; try { localStorage.setItem("abc_voice", voicePack); } catch(e){}
+    unlockAudio(); say(["zh_follow", "w_A0", "c_A0"], "Apple"); renderParent();
+  });
   // 成长档案
   saveStats();
   const A = Medals.totals(archive), st = Medals.streakOf(archive.days, dayKey());
@@ -893,19 +965,34 @@ $("caseBtn").addEventListener("click",e=>{
   else if (/^[A-Z]$/i.test(letterEl.textContent)) letterEl.textContent = caseOf(letterEl.textContent.toUpperCase());
   e.target.blur();
 });
-$("muteBtn").addEventListener("click",e=>{ muted=!muted; e.target.textContent = muted?"🔇":"🔊"; if(muted){ speechSynthesis.cancel(); playing?.pause(); } e.target.blur(); });
+$("muteBtn").addEventListener("click",e=>{ muted=!muted; e.target.textContent = muted?"🔇":"🔊"; if(muted){ speechSynthesis.cancel(); stopAudio(); } e.target.blur(); });
 $("fsBtn").addEventListener("click",e=>{
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.();
   e.target.blur();
 });
 $("start").addEventListener("click",()=>{
+  unlockAudio();         // 这一下点击打开声音通道，之后所有语音都能连着放
   $("start").remove();
   document.documentElement.requestFullscreen?.().catch(()=>{});
+  // 其余常用语音过几秒再分批预加载，别堵住开头那几句
+  const later = Object.keys(ZH).concat(["zh_ye_crowd", "m_excellent", "m_verygood", "m_good", "m_nicetry", "m_tryagain"]);
+  later.forEach((c, i) => setTimeout(() => prefetch([c]), 4000 + i * 150));
   started = true; checkRest();
   if (resting) return;   // 今天的时间已经用完，直接是休息页
+  // 每天第一次打开：有上次学过的单词就先复习，直接进拼单词
+  reviewQ = buildReview();
+  if (reviewQ.length){
+    document.querySelectorAll("header .tab").forEach(x => x.classList.toggle("on", x.dataset.mode === "spell"));
+    mode = "spell"; tilesEl.innerHTML = ""; spell = null; target = null;
+    newSpell();
+    return;
+  }
   freePress("A");
   setTimeout(()=>{ if (mode==="free" && !recBusy) say(["zh_free"], ""); }, 2600); // 开场后用中文告诉她怎么玩
 });
+// 每次点击、按键都确认声音通道是开着的（手机切到后台再回来会被关掉）
+document.addEventListener("pointerdown", ()=>{ if (actx && actx.state !== "running") actx.resume(); }, true);
+document.addEventListener("keydown", ()=>{ if (actx && actx.state !== "running") actx.resume(); }, true);
 </script>
 </body>
 </html>

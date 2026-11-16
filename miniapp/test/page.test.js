@@ -47,7 +47,7 @@ config.AUDIO_BASE = 'cloud://env/audio/';
 
 (async () => {
   require(path.join(MP, 'pages/index/index'));
-  const P = mount();
+  const P = mount(); const indexDef = pageDef;
   P.onShow();
   const tap = k => P.tapKey({ currentTarget: { dataset: { k } } });
 
@@ -113,6 +113,7 @@ config.AUDIO_BASE = 'cloud://env/audio/';
   ok(lastCall.name === 'soe' && lastCall.data.word === P.data.parts.pre + P.data.parts.hl + P.data.parts.post, '录音交给云函数 soe 评测');
   ok(P.data.result.level === 2 && P.data.result.part.hl.toLowerCase() === 'a', '2 档并标出要练的字母 a');
   ok(['zh_follow', 'zh_yourturn', 'zh_hear', 'temp', 'zh_score2', 'zh_listenpart'].every(x => played.includes(x)), '示范 → 该你读 → 回放 → 鼓励 → 纠音 的顺序都放了');
+ok(played.includes('m_nicetry'), '68 分：男声 Nice try');
   ok(P.data.mic === 'idle', '跟读完按钮恢复');
 
   // 5. 读得很好：3 档，不挑毛病
@@ -154,7 +155,18 @@ ok(/[🥇🥈🥉]/.test(P.data.card.medal) && P.data.card.words === 1 && /🐼|
   ok(!P.data.resting, '家长加 5 分钟后恢复');
   ok(k, '统计按日期存');
 
+  // 9. 第二天先复习上次学过的单词
+  const stats2 = require(path.join(MP, 'utils/stats'));
+  const yk = stats2.dayKey(new Date(Date.now() - 864e5));
+  stats2.getArchive().wordDays[yk] = ['Cat', 'Dog'];
+  stats2.today().reviewed = false;
   P.onUnload();
+  pageDef = indexDef; const P2 = mount(); P2.onShow(); played.length = 0;
+  P2.start(); await wait(30);
+  ok(P2.data.mode === 'spell' && P2.data.prompt.includes('复习') && played[0] === 'zh_review', '第二天打开：先说「我们先复习一下」，进拼单词');
+  const rw = P2.data.tiles.map(t => t.key).join('');
+  ok(rw === 'CAT' || rw === 'DOG', '复习的是上次学过的单词（' + rw + '）');
+  P2.onUnload();
   console.log(`小程序页面流程：${pass} 项全部通过`);
   process.exit(0);
 })().catch(e => { console.error('失败：', e.message); process.exit(1); });
