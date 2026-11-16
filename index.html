@@ -243,17 +243,19 @@ function pickVoice(){
   voice = vs.find(v=>/Samantha|Zira|Jenny|Aria|Google US English|Female/i.test(v.name)) || vs[0] || null;
 }
 if ("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text, rate=0.8, zh="", done){
+function speak(text, rate=0.8, zh="", done, zhAfter=false){
   done = done || (()=>{});
   if (muted || !("speechSynthesis" in window)) return done();
   speechSynthesis.cancel();
   let last=null;
-  if (zh){ last = new SpeechSynthesisUtterance(zh); last.lang="zh-CN"; last.rate=0.95; speechSynthesis.speak(last); }
+  const sayZh = ()=>{ if (zh){ last = new SpeechSynthesisUtterance(zh); last.lang="zh-CN"; last.rate=0.95; speechSynthesis.speak(last); } };
+  if (!zhAfter) sayZh();
   if (text){
     last = new SpeechSynthesisUtterance(text);
     last.lang="en-US"; last.rate=rate; last.pitch=1.15; if (voice) last.voice=voice;
     speechSynthesis.speak(last);
   }
+  if (zhAfter) sayZh();   // 「Cat，猫」：英文在前、中文意思在后
   if (!last) return done();
   last.onend = done; last.onerror = done;
   setTimeout(done, 9000); // 有的浏览器不触发 onend，兜底
@@ -266,7 +268,9 @@ const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一�
   zh_today:"今天你拼对了", zh_words_end:"个单词，真棒！", zh_many:"好多好多",
   zh_score3:"哇，读得真标准！", zh_score2:"很不错！有一个音再读清楚一点就更好啦。", zh_score1:"我们再听一遍，慢慢跟着读。",
   zh_noheard:"没听清楚，大声一点再读一次好吗？", zh_listenpart:"听，这个地方要这样读：" };
-const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "");  // 数字直接给浏览器读
+const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "")   // 数字直接给浏览器读
+  || (/^c_[A-Z]\d$/.test(c) ? DATA[c[2]][+c[3]][2] : "");                 // 单词的中文意思
+const cnClip = w => /^w_[A-Z]\d$/.test(w) ? "c_" + w.slice(2) : null;     // w_C0 → c_C0（Cat → 猫）
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
 // 返回一个 Promise：整串播完（或被新的一句打断）时结束，跟读要等示范读完再录
@@ -278,8 +282,10 @@ function say(clips, text, rate){
     if (playing){ playing.pause(); playing=null; }
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     let i=0, fell=false;
+    clips = clips.filter(Boolean);
     const zh = clips.map(zhText).join("");
-    const fallback=()=>{ if (fell || token!==playToken) return fin(); fell=true; speak(text, rate, zh, fin); };
+    const zhAfter = clips.length > 0 && !zhText(clips[0]);   // 第一段是英文，中文就放后面读
+    const fallback=()=>{ if (fell || token!==playToken) return fin(); fell=true; speak(text, rate, zh, fin, zhAfter); };
     const next=()=>{
       if (token!==playToken || i>=clips.length) return fin();
       const a=new Audio(`audio/${clips[i++]}.mp3`);
@@ -355,7 +361,7 @@ function freePress(L){
   picEl.style.fontSize="";
   const word = showLetter(L);
   updateMic();
-  say([`p_${L}${idx[L]}`], `${SAY[L]}. ${SAY[L]} is for ${word}.`);
+  say([`p_${L}${idx[L]}`, `c_${L}${idx[L]}`], `${SAY[L]}. ${SAY[L]} is for ${word}.`);  // 英文读完接中文意思
 }
 
 const LETTERS = Object.keys(DATA);
@@ -387,7 +393,7 @@ function findPress(L){
     stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
     chime(); confetti();
     const g = Math.floor(Math.random()*PRAISE.length);
-    say(["zh_great", `g_${g}`, `p_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
+    say(["zh_great", `g_${g}`, `p_${L}0`, `c_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
     setTimeout(()=>{ busy=false; if (mode==="find" && !resting) newTarget(); }, 3200);
   } else {
     // 按错不扣分，只是轻轻摇一下，然后马上亮提示
@@ -410,10 +416,59 @@ function newSpell(){
   spell = {word:word.toUpperCase(), emoji, cn, clip:`w_${p.L}${p.i}`, pos:0, color:COLORS[Math.floor(Math.random()*COLORS.length)]};
   cur = {L:null, word, w:spell.clip};
   letterEl.textContent=""; picEl.textContent=emoji; wordEl.textContent=""; cnEl.textContent=cn;
-  promptEl.textContent="🔊 把这个单词敲出来！";
+  promptEl.textContent="🔊 听一听，跟我读！";
   restart(picEl,"pop");
-  drawTiles(); updateMic();
-  say(["zh_spell", spell.clip], word);
+  busy = true;                 // 先读：示范和跟读的时候键盘不响应
+  drawTiles(); clearHint(); updateMic();
+  spellIntro(++spellTok);
+}
+// 顺序「读 → 拼 → 读」（11-16 用户定）：先听示范、自己读一遍（只鼓励不打分），再拼，拼完再读一遍打分
+let spellTok = 0;
+const spellAlive = tok => tok === spellTok && mode === "spell" && !resting;
+async function spellIntro(tok){
+  const s = spell, word = cur.word;
+  await say(["zh_follow", s.clip, cnClip(s.clip)], word, .7);   // 听示范，接着说中文意思
+  if (!spellAlive(tok)) return;
+  if (canRec()){
+    await say(["zh_yourturn"], "");
+    if (!spellAlive(tok)) return;
+    try { recBusy = true; await recordClip(word); } catch(e){ /* 没有麦克风就跳过跟读 */ }
+    recBusy = false; updateMic();
+    if (!spellAlive(tok)) return;
+    await say(["zh_goodtry"], "");
+    if (!spellAlive(tok)) return;
+  }
+  busy = false;
+  promptEl.textContent = "🔊 把这个单词敲出来！";
+  drawTiles();                 // 亮出第一个要敲的键
+  say(["zh_spell"], "");
+}
+async function spellOutro(tok){
+  const s = spell, word = cur.word;
+  await say(["zh_ye_crowd", s.clip], `Yay! ${word}!`);   // 一群小朋友一起喊「耶」
+  if (!spellAlive(tok)) return;
+  if (canRec()){
+    promptEl.textContent = "🔊 再读一次给我听！";
+    await say(["zh_readagain"], "");
+    if (!spellAlive(tok)) return;
+    let blob = null;
+    try { recBusy = true; blob = await recordClip(word); } catch(e){}
+    if (blob){
+      promptEl.textContent = "🎧 正在打分…";
+      const res = await scoreIt(blob, word);
+      recs[0].score = res;
+      recBusy = false;
+      if (!spellAlive(tok)) return;
+      promptEl.textContent = "耶！🎉";
+      await showScore(res, word, s.clip);
+      if (!spellAlive(tok)) return;
+      await say([s.clip, cnClip(s.clip)], word, .8);   // 最后再说一遍「Cat，猫」
+    }
+    recBusy = false; updateMic(false);
+  } else await say([s.clip, cnClip(s.clip)], word, .8);
+  if (!spellAlive(tok)) return;
+  await new Promise(r => setTimeout(r, 1500));
+  if (spellAlive(tok)){ busy = false; newSpell(); }
 }
 function drawTiles(){
   tilesEl.innerHTML="";
@@ -443,8 +498,7 @@ function spellPress(L){
   today().words.push(cur.word); saveStats();   // 统计：今天拼对的单词
   stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
   promptEl.textContent="耶！🎉"; chime(); confetti(26);
-  say(["zh_ye_crowd", spell.clip, spell.clip], `Yay! ${cur.word}!`);   // 一群小朋友一起喊「耶」
-  setTimeout(()=>{ busy=false; if (mode==="spell" && !resting) newSpell(); }, 4200);
+  spellOutro(spellTok);   // 耶 → 再读一次给我听 → 打分 → 下一个词
 }
 
 function press(L){
@@ -545,10 +599,34 @@ let micStream = null, recorder = null, recBusy = false;
 const recs = []; // 这次打开后的录音，只在内存里
 function updateMic(clear = true){
   if (clear && typeof scoreEl !== "undefined") scoreEl.innerHTML = "";  // 换了字母 / 单词就清掉上次的分数
-  const ok = !resting && !busy && cur.word && cur.w && /^w_/.test(cur.w) && (mode==="free" || mode==="spell");
-  micBtn.hidden = !ok || !(navigator.mediaDevices && window.MediaRecorder);
+  // 拼单词里「读 → 拼 → 读」已经自带跟读，按钮只在随便按里出现
+  const ok = !resting && !busy && cur.word && cur.w && /^w_/.test(cur.w) && mode==="free";
+  micBtn.hidden = !ok || !canRec();
 }
+let micDenied = false;
+const canRec = () => !micDenied && !!(navigator.mediaDevices && window.MediaRecorder);
 function stopRec(){ try { if (recorder && recorder.state==="recording") recorder.stop(); } catch(e){} }
+// 录一段（默认 3 秒），录音时按钮变红在跳；返回录音 blob。录音记进家长面板的列表
+async function recordClip(word, ms = 3000){
+  if (!micStream){
+    try { micStream = await navigator.mediaDevices.getUserMedia({ audio:true }); }
+    catch(e){ micDenied = true; throw e; }
+  }
+  const chunks = [];
+  recorder = new MediaRecorder(micStream);
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  const stopped = new Promise(r => recorder.onstop = r);
+  micBtn.hidden = false; micBtn.disabled = true;
+  micBtn.classList.add("rec"); micBtn.textContent = "🔴 正在听你读…";
+  recorder.start(); setTimeout(stopRec, ms);
+  await stopped;
+  micBtn.classList.remove("rec"); micBtn.textContent = "🎤 跟我读";
+  const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+  const url = URL.createObjectURL(blob);
+  recs.unshift({ word, url, time: new Date().toTimeString().slice(0,5) }); if (recs.length > 30) URL.revokeObjectURL(recs.pop().url);
+  const t = today(); t.reads++; saveStats();
+  return blob;
+}
 async function followMe(){
   if (recBusy || !cur.w) return;
   recBusy = true; busy = true; micBtn.disabled = true;
@@ -557,20 +635,10 @@ async function followMe(){
     if (!micStream) micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
     await say(["zh_follow", clip], word, .7);
     await say(["zh_yourturn"], "");
-    // 录 3 秒，按钮变红在跳
-    const chunks = [];
-    recorder = new MediaRecorder(micStream);
-    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
-    const stopped = new Promise(r => recorder.onstop = r);
-    micBtn.classList.add("rec"); micBtn.textContent = "🔴 正在听你读…";
-    recorder.start(); setTimeout(stopRec, 3000);
-    await stopped;
-    micBtn.classList.remove("rec"); micBtn.textContent = "🎧 正在打分…";
-    const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    const blob = await recordClip(word);
+    micBtn.textContent = "🎧 正在打分…";
     const scoring = scoreIt(blob, word);   // 一边回放一边去打分
-    const url = URL.createObjectURL(blob);
-    recs.unshift({ word, url, time: new Date().toTimeString().slice(0,5) }); if (recs.length > 30) URL.revokeObjectURL(recs.pop().url);
-    const t = today(); t.reads++; saveStats();
+    const url = recs[0].url;
     await say(["zh_hear"], "");
     if (!muted) await new Promise(r => { const a = new Audio(url); a.onended = r; a.onerror = r; a.play().catch(r); });
     const res = await scoring;
@@ -716,7 +784,7 @@ letterEl.addEventListener("click",()=>{
   if (cur.num) return say([cur.w], cur.num);
   if (cur.L){ restart(letterEl,"pop"); say([`l_${cur.L}`], SAY[cur.L], .7); }
 });
-const sayWord = ()=>{ if (cur.word){ restart(picEl,"pop"); say([cur.w], cur.word, .7); } };
+const sayWord = ()=>{ if (cur.word){ restart(picEl,"pop"); say([cur.w, cnClip(cur.w)].filter(Boolean), cur.word, .7); } };
 picEl.addEventListener("click", sayWord);
 wordEl.addEventListener("click", sayWord);
 

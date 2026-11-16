@@ -7,7 +7,7 @@ const rec = require('../../utils/rec');
 const { EVAL_PER_DAY, AUDIO_BASE } = require('../../config');
 
 const empty = { pre: '', hl: '', post: '' };
-let idx = {}, target = null, spell = null, cur = {}, busy = false, recBusy = false, timer = null, hintTimer = null, warned1 = false;
+let idx = {}, target = null, spell = null, cur = {}, busy = false, recBusy = false, timer = null, hintTimer = null, warned1 = false, spellTok = 0, micOff = false;
 
 Page({
   data: {
@@ -78,7 +78,7 @@ Page({
       letter: this.data.upper ? L : L.toLowerCase(), letterColor: G.color(), pic: emoji, parts: G.split(word, L), cn,
       pop: this.data.pop + 1, result: null, mic: 'idle',
     });
-    sound.play([`p_${L}${idx[L]}`]);
+    sound.play([`p_${L}${idx[L]}`, `c_${L}${idx[L]}`]); // 英文读完接中文意思（Cat → 猫）
   },
   showNumber(n) {
     cur = { word: G.NUM_WORDS[n], w: `n_${n}` };
@@ -103,7 +103,7 @@ Page({
       cur = { L, word, w: `w_${L}0` };
       stats.today().finds++; stats.save();
       this.setData({ pic: emoji, parts: G.split(word, L), cn, prompt: '太棒啦！🎉', stars: this.data.stars + 1, keys: G.keyRows(this.data.upper, '') });
-      sound.play(['zh_great', `g_${G.rand(G.PRAISE_N)}`, `p_${L}0`]);
+      sound.play(['zh_great', `g_${G.rand(G.PRAISE_N)}`, `p_${L}0`, `c_${L}0`]);
       setTimeout(() => { busy = false; if (this.data.mode === 'find' && !this.data.resting) this.newTarget(); }, 3200);
     } else {
       this.setData({ shake: this.data.shake + 1 });
@@ -113,11 +113,72 @@ Page({
   },
 
   // ---------- 拼单词 ----------
+  // 顺序「读 → 拼 → 读」（11-16 用户定）：先听示范、自己读一遍（只鼓励不打分），再拼，拼完再读一遍打分
   newSpell() {
     spell = G.pickSpell(spell && spell.clip);
     cur = { word: spell.word, w: spell.clip };
-    this.setData({ letter: '', pic: spell.emoji, parts: empty, cn: spell.cn, prompt: '🔊 把这个单词敲出来！', tiles: G.tiles(spell, this.data.upper), keys: G.keyRows(this.data.upper, spell.upper[0]), pop: this.data.pop + 1, mic: 'idle', result: null });
-    sound.play(['zh_spell', spell.clip]);
+    busy = true; // 先读：示范和跟读时键盘不响应
+    // 先读的时候格子都不跳、键都不亮
+    this.setData({ letter: '', pic: spell.emoji, parts: empty, cn: spell.cn, prompt: '🔊 听一听，跟我读！', tiles: G.tiles(Object.assign({}, spell, { pos: -1 }), this.data.upper), keys: G.keyRows(this.data.upper, ''), pop: this.data.pop + 1, mic: 'hide', result: null });
+    this.spellIntro(++spellTok);
+  },
+  spellAlive(tok) { return tok === spellTok && this.data.mode === 'spell' && !this.data.resting; },
+  async spellIntro(tok) {
+    const clip = spell.clip, cnc = G.cnClip(clip);
+    await sound.play(['zh_follow', clip, cnc], 0.85);
+    if (!this.spellAlive(tok)) return;
+    if (await this.micReady()) {
+      await sound.play(['zh_yourturn']);
+      if (!this.spellAlive(tok)) return;
+      recBusy = true; this.setData({ mic: 'rec' });
+      try { await rec.record(3000); stats.today().reads++; stats.save(); } catch (e) { /* 录不了就跳过 */ }
+      recBusy = false; this.setData({ mic: 'hide' });
+      if (!this.spellAlive(tok)) return;
+      await sound.play(['zh_goodtry']);
+      if (!this.spellAlive(tok)) return;
+    }
+    busy = false;
+    this.setData({ prompt: '🔊 把这个单词敲出来！', tiles: G.tiles(spell, this.data.upper), keys: G.keyRows(this.data.upper, this.hintKey()) });
+    sound.play(['zh_spell']);
+  },
+  async spellOutro(tok) {
+    const clip = spell.clip, cnc = G.cnClip(clip), word = spell.word;
+    await sound.play(['zh_ye_crowd', clip]); // 一群小朋友一起喊「耶」
+    if (!this.spellAlive(tok)) return;
+    if (await this.micReady()) {
+      this.setData({ prompt: '🔊 再读一次给我听！' });
+      await sound.play(['zh_readagain']);
+      if (!this.spellAlive(tok)) return;
+      recBusy = true; this.setData({ mic: 'rec' });
+      let path = null;
+      try { path = await rec.record(3000); stats.today().reads++; stats.save(); } catch (e) {}
+      this.setData({ mic: 'busy', prompt: '🎧 正在打分…' });
+      const canEval = path && (stats.today().evals || []).length < EVAL_PER_DAY;
+      const r = canEval ? await rec.evaluate(path, word).catch(() => null) : null;
+      recBusy = false; this.setData({ mic: 'hide', prompt: '耶！🎉' });
+      if (!this.spellAlive(tok)) return;
+      if (r) await this.feedback(r, word, clip);
+      if (!this.spellAlive(tok)) return;
+    }
+    await sound.play([clip, cnc]); // 最后再说一遍「Cat，猫」
+    await new Promise(res => setTimeout(res, 1500));
+    if (this.spellAlive(tok)) { busy = false; this.newSpell(); }
+  },
+  // 第一次用麦克风：先请家长同意（录音发去腾讯云评测、不保存），再要麦克风权限；不同意就不录
+  async micReady() {
+    if (micOff) return false;
+    if (!wx.getStorageSync('abc_mic_ok')) {
+      const ok = await new Promise(r => wx.showModal({
+        title: '给家长的说明', confirmText: '同意', cancelText: '不用了',
+        content: '「跟我读」会录下孩子读单词的 3 秒声音，发送到腾讯云口语评测打分，评完不保存录音，只在本机记分数。',
+        success: x => r(x.confirm), fail: () => r(false),
+      }));
+      if (!ok) { micOff = true; return false; }
+      wx.setStorageSync('abc_mic_ok', 1);
+    }
+    const ok = await rec.ensureMic();
+    if (!ok) micOff = true;
+    return ok;
   },
   spellPress(L) {
     if (busy || !spell) return;
@@ -129,8 +190,7 @@ Page({
     busy = true;
     stats.today().words.push(spell.word); stats.save();
     this.setData({ prompt: '耶！🎉', stars: this.data.stars + 1, mic: 'hide' });
-    sound.play(['zh_ye_crowd', spell.clip, spell.clip]); // 一群小朋友一起喊「耶」
-    setTimeout(() => { busy = false; if (this.data.mode === 'spell' && !this.data.resting) this.newSpell(); }, 4200);
+    this.spellOutro(spellTok); // 耶 → 再读一次给我听 → 打分 → 下一个词
   },
 
   // ---------- 点一下重读 ----------
@@ -138,7 +198,7 @@ Page({
     if (this.data.mode === 'find' && target && !busy) return sound.play(['zh_find', `f_${target}`]);
     if (cur.L) sound.play([`l_${cur.L}`]);
   },
-  tapWord() { if (cur.w) sound.play([cur.w], 0.85); },
+  tapWord() { if (cur.w) sound.play([cur.w, G.cnClip(cur.w)].filter(Boolean), 0.85); },
   tapTile(e) { sound.play([`l_${e.currentTarget.dataset.k}`]); },
   tapPrompt() {
     if (this.data.mode === 'find' && target) sound.play(['zh_find', `f_${target}`]);
@@ -150,22 +210,13 @@ Page({
   async followMe() {
     if (recBusy || !cur.w || !/^w_/.test(cur.w)) return;
     const t = stats.today();
-    // 第一次用：告诉家长录音会发到腾讯云评测、不保存
-    if (!wx.getStorageSync('abc_mic_ok')) {
-      const ok = await new Promise(r => wx.showModal({
-        title: '给家长的说明', confirmText: '同意', cancelText: '不用了',
-        content: '「跟我读」会录下孩子读单词的 3 秒声音，发送到腾讯云口语评测打分，评完不保存录音，只在本机记分数。',
-        success: x => r(x.confirm), fail: () => r(false),
-      }));
-      if (!ok) return;
-      wx.setStorageSync('abc_mic_ok', 1);
-    }
-    if (!(await rec.ensureMic())) return;
+    micOff = false; // 家长主动点了「跟我读」：不同意过的再问一次
+    if (!(await this.micReady())) return;
     recBusy = true; busy = true;
     const word = cur.word, clip = cur.w;
     try {
       this.setData({ mic: 'busy', result: null });
-      await sound.play(['zh_follow', clip], 0.85);
+      await sound.play(['zh_follow', clip, G.cnClip(clip)], 0.85);
       await sound.play(['zh_yourturn']);
       this.setData({ mic: 'rec' });
       const path = await rec.record(3000);
@@ -182,7 +233,7 @@ Page({
       if (e && e.message === 'nomic') wx.showToast({ title: '没有麦克风权限', icon: 'none' });
     }
     recBusy = false; busy = false;
-    this.setData({ mic: this.data.mode === 'find' || !cur.w || !/^w_/.test(cur.w) ? 'hide' : 'idle' });
+    this.setData({ mic: this.data.mode !== 'free' || !cur.w || !/^w_/.test(cur.w) ? 'hide' : 'idle' });
   },
   async feedback(r, word, clip) {
     if (!r) { await sound.play([clip], 0.85); this.setData({ stars: this.data.stars + 1 }); return; } // 没配评测：再放一遍示范

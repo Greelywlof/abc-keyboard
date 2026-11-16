@@ -80,6 +80,7 @@ function clips() {
       c[`w_${L}${i}`] = `${word}.`;                         // 只读单词
       c[`p_${L}${i}`] = `${L}! ${L} is for ${word}.`;       // 按键时读的整句
     });
+    DATA[L].forEach(([, , cn], i) => { c[`c_${L}${i}`] = `${cn}。`; }); // 单词的中文意思（孩子不认字，读完英文接着说中文）
   }
   NUM.forEach((n, i) => { c[`n_${i}`] = `${n}.`; });
   PRAISE.forEach((t, i) => { c[`g_${i}`] = t; });
@@ -102,6 +103,9 @@ function clips() {
   c.zh_score1 = '我们再听一遍，慢慢跟着读。';
   c.zh_noheard = '没听清楚，大声一点再读一次好吗？';
   c.zh_listenpart = '听，这个地方要这样读：';
+  // 拼单词「读 → 拼 → 读」
+  c.zh_goodtry = '读得好！';
+  c.zh_readagain = '再读一次给我听！';
   // 休息页把统计也读出来：「今天你拼对了」+ 数字 +「个单词，真棒！」（孩子不认字，屏幕上的字都要能听到）
   c.zh_today = '今天你拼对了';
   c.zh_words_end = '个单词，真棒！';
@@ -125,7 +129,7 @@ function clips() {
   for (const [name, text] of all) {
     const f = path.join(OUT, name + '.mp3');
     if (!force && fs.existsSync(f)) { skipped++; continue; }
-    fs.writeFileSync(f, await synth(text, name.startsWith('zh_')));
+    fs.writeFileSync(f, await synth(text, name.startsWith('zh_') || name.startsWith('c_')));
     made++; process.stdout.write(`\r${made + skipped}/${all.length} ${name}            `);
   }
   console.log(`\n完成：新生成 ${made} 个，跳过 ${skipped} 个。音色 ${VOICE}，模型 ${MODEL}`);

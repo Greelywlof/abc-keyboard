@@ -52,4 +52,7 @@ function restClips(n) {
   return ['zh_rest', 'zh_today', n <= 50 ? `zh_n_${n}` : 'zh_many', 'zh_words_end'];
 }
 
-module.exports = { restClips, DATA, LETTERS, SPELL, NUM_WORDS, NUM_CN, PRAISE_N, color, rand, split, splitPart, pickTarget, pickSpell, tiles, keyRows };
+// 单词读音对应的中文意思：w_C0（Cat）→ c_C0（猫）
+const cnClip = w => (/^w_[A-Z]\d$/.test(w) ? 'c_' + w.slice(2) : null);
+
+module.exports = { cnClip, restClips, DATA, LETTERS, SPELL, NUM_WORDS, NUM_CN, PRAISE_N, color, rand, split, splitPart, pickTarget, pickSpell, tiles, keyRows };

@@ -26,7 +26,7 @@ function playSrc(src, rate) {
 async function play(clips, rate) {
   const my = ++token;
   if (muted || !AUDIO_BASE) return;
-  for (const c of clips) {
+  for (const c of clips.filter(Boolean)) {
     if (my !== token) return;
     await playSrc(AUDIO_BASE + c + '.mp3', rate);
   }

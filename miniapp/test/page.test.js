@@ -63,14 +63,30 @@ config.AUDIO_BASE = 'cloud://env/audio/';
   ok(P.data.pic === '⭐⭐⭐' && P.data.mic === 'hide', '数字 3 出三颗星，不显示跟读');
 
   // 2. 拼单词：敲完整个词计入统计、读「耶」
-  P.setMode({ currentTarget: { dataset: { mode: 'spell' } } }); await wait(10);
+  played.length = 0;
+  P.setMode({ currentTarget: { dataset: { mode: 'spell' } } }); await wait(5);
   const word = P.data.tiles.map(t => t.key).join('');
-  ok(word.length >= 2 && P.data.keys.flat().find(k => k.hint).k === word[0], '拼单词：第一个字母的键亮着');
+  ok(!P.data.keys.flat().some(k => k.hint) && P.data.prompt.includes('跟我读'), '拼单词先读：键盘还没亮');
+  tap(word[0]); await wait(2);
+  ok(P.data.tiles[0].cls !== 'done', '先读的时候敲键不算');
+  await wait(150);
+  const cnc = 'c_' + P.data.tiles.length; // 占位，下面按顺序检查
+  const order = ['zh_follow', 'zh_yourturn', 'zh_goodtry', 'zh_spell'].map(x => played.indexOf(x));
+  ok(order.every((v, i) => v >= 0 && (i === 0 || v > order[i - 1])), '顺序：听示范 → 该你读 → 读得好 → 敲出来');
+  ok(played.some(x => /^c_[A-Z]\d$/.test(x)) && played.indexOf(played.find(x => /^c_/.test(x))) > played.indexOf('zh_follow'), '示范后接中文意思');
+  ok(P.data.keys.flat().find(k => k.hint).k === word[0], '读完后第一个字母的键亮起');
+  void cnc;
   tap(word[0] === 'Z' ? 'Q' : 'Z'); await wait(10);
   ok(P.data.tiles[0].cls === 'now', '敲错不前进');
   played.length = 0;
+  evalReply = { ok: true, data: { level: 3, total: 95, weak: null } };
   for (const c of word) { tap(c); await wait(5); }
-  await wait(20);
+  await wait(150);
+  ok(['zh_ye_crowd', 'zh_readagain', 'zh_score3'].every(x => played.includes(x)) && played.indexOf('zh_readagain') > played.indexOf('zh_ye_crowd'), '拼完：耶 → 再读一次给我听 → 打分');
+  ok(cloudCalls.length === 1 && cloudCalls[0].data.word.toUpperCase() === word, '拼完再读的那次交给评测');
+  const lastC = played.filter(x => /^c_/.test(x)).length;
+  ok(lastC >= 1 && /^c_/.test(played[played.length - 1]), '拼完最后说一遍英文 + 中文意思');
+  evalReply = null;
   const today = storage.abc_stats[Object.keys(storage.abc_stats)[0]];
   ok(today.words.length === 1 && today.words[0].toUpperCase() === word, '拼对的单词记进统计');
   ok(played.includes('zh_ye_crowd'), '拼完一群人喊「耶」');
@@ -93,7 +109,8 @@ config.AUDIO_BASE = 'cloud://env/audio/';
   played.length = 0;
   await P.followMe();
   ok(storage.abc_mic_ok === 1, '家长同意说明后记住');
-  ok(cloudCalls.length === 1 && cloudCalls[0].name === 'soe' && cloudCalls[0].data.word === P.data.parts.pre + P.data.parts.hl + P.data.parts.post, '录音交给云函数 soe 评测');
+  const lastCall = cloudCalls[cloudCalls.length - 1];
+  ok(lastCall.name === 'soe' && lastCall.data.word === P.data.parts.pre + P.data.parts.hl + P.data.parts.post, '录音交给云函数 soe 评测');
   ok(P.data.result.level === 2 && P.data.result.part.hl.toLowerCase() === 'a', '2 档并标出要练的字母 a');
   ok(['zh_follow', 'zh_yourturn', 'zh_hear', 'temp', 'zh_score2', 'zh_listenpart'].every(x => played.includes(x)), '示范 → 该你读 → 回放 → 鼓励 → 纠音 的顺序都放了');
   ok(P.data.mic === 'idle', '跟读完按钮恢复');
@@ -115,7 +132,7 @@ config.AUDIO_BASE = 'cloud://env/audio/';
   ok(!Q.data.ok && Q.data.wrong, '答错进不去');
   Q.input({ detail: { value: String(Q.answer) } }); Q.check();
   ok(Q.data.ok && Q.data.cards[0].n === 1, '答对进入，显示拼对 1 个单词');
-  ok(Q.data.evals.length === 2 && Q.data.cards.find(c => c.s === '跟读平均分').n === 80, '跟读评测 2 条，平均分 (68+91)/2≈80');
+  ok(Q.data.evals.length === 3 && Q.data.cards.find(c => c.s === '跟读平均分').n === 85, '跟读评测 3 条（含拼完再读那次），平均分 (95+68+91)/3≈85');
   ok(Q.data.bars.length === 7 && Q.data.bars[6].n === 1, '7 天柱状图，今天 1');
 
   // 8. 限时：剩 1 分钟提醒，到点休息，家长加时间后恢复
