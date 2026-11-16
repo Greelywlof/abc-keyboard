@@ -104,6 +104,7 @@
 
 <script>
 // ---------- 字母数据：每个字母两个简单单词，按一次换一个 ----------
+// 改单词时同步改 tools/words.json，再跑 node tools/gen-audio.js 重新生成发音
 const DATA = {
   A:[["Apple","🍎","苹果"],["Ant","🐜","蚂蚁"]],
   B:[["Ball","⚽","球"],["Bear","🐻","熊"]],
@@ -161,6 +162,23 @@ function speak(text, rate=0.8){
   u.lang="en-US"; u.rate=rate; u.pitch=1.15; if (voice) u.voice=voice;
   speechSynthesis.speak(u);
 }
+// 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
+let playing=null, playToken=0;
+function say(clips, text, rate){
+  if (muted) return;
+  const token=++playToken;
+  if (playing){ playing.pause(); playing=null; }
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  let i=0, fell=false;
+  const fallback=()=>{ if (fell || token!==playToken) return; fell=true; speak(text, rate); };
+  const next=()=>{
+    if (token!==playToken || i>=clips.length) return;
+    const a=new Audio(`audio/${clips[i++]}.mp3`);
+    playing=a; a.onended=next; a.onerror=fallback;
+    a.play().catch(fallback);
+  };
+  next();
+}
 let actx=null;
 function beep(freq=660, dur=.12, type="sine"){
   if (muted) return;
@@ -188,7 +206,7 @@ function showLetter(L){
   const [word, emoji, cn] = list[idx[L]];
   letterEl.style.color = COLORS[Math.floor(Math.random()*COLORS.length)];
   letterEl.textContent = caseOf(L);
-  cur = {L, word};
+  cur = {L, word, w:`w_${L}${idx[L]}`};
   picEl.textContent = emoji;
   wordEl.innerHTML = wordHTML(word, L);
   cnEl.textContent = cn;
@@ -201,9 +219,9 @@ function showNumber(n){
   picEl.textContent = n===0 ? "🫙" : "⭐".repeat(n);
   picEl.style.fontSize = n>3 ? "min(9vh,9vw)" : "";
   wordEl.textContent = NUM_WORDS[n]; cnEl.textContent = NUM_CN[n];
-  cur = {L:null, word:NUM_WORDS[n], num:NUM_WORDS[n]};
+  cur = {L:null, word:NUM_WORDS[n], num:NUM_WORDS[n], w:`n_${n}`};
   restart(letterEl,"pop"); restart(picEl,"pop");
-  speak(NUM_WORDS[n]);
+  say([`n_${n}`], NUM_WORDS[n]);
 }
 function confetti(n=18){
   const bits=["🎉","⭐","🌟","🎈","💖","✨"];
@@ -226,7 +244,7 @@ function hint(L){ const k=document.querySelector(`.k[data-k="${L}"]`); if(k) k.c
 function freePress(L){
   picEl.style.fontSize="";
   const word = showLetter(L);
-  speak(`${SAY[L]}. ${SAY[L]} is for ${word}.`);
+  say([`p_${L}${idx[L]}`], `${SAY[L]}. ${SAY[L]} is for ${word}.`);
 }
 
 const LETTERS = Object.keys(DATA);
@@ -241,7 +259,7 @@ function newTarget(){
   wordEl.textContent=""; cnEl.textContent="";
   promptEl.textContent = "在键盘上找到这个字母！";
   restart(letterEl,"pop");
-  speak(`Can you find ${SAY[t]}?`);
+  say([`f_${t}`], `Can you find ${SAY[t]}?`);
   // 4 岁小朋友找不到很正常：8 秒后屏幕键盘自动亮起提示
   hintTimer = setTimeout(()=>hint(t), 8000);
 }
@@ -251,17 +269,18 @@ function findPress(L){
     busy=true; clearHint();
     const [word, emoji, cn] = DATA[L][0];
     picEl.textContent = emoji; wordEl.innerHTML = wordHTML(word,L); cnEl.textContent = cn;
-    cur = {L, word};
+    cur = {L, word, w:`w_${L}0`};
     restart(picEl,"pop");
     promptEl.textContent = "太棒啦！🎉";
     stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
     chime(); confetti();
-    speak(`${PRAISE[Math.floor(Math.random()*PRAISE.length)]} ${SAY[L]} is for ${word}.`);
+    const g = Math.floor(Math.random()*PRAISE.length);
+    say([`g_${g}`, `p_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
     setTimeout(()=>{ busy=false; newTarget(); }, 3200);
   } else {
     // 按错不扣分，只是轻轻摇一下，然后马上亮提示
     restart(letterEl,"shake"); beep(300,.15,"sine");
-    speak(`That's ${SAY[L]}. Find ${SAY[target]}!`, .85);
+    say([`l_${L}`, `f_${target}`], `That's ${SAY[L]}. Find ${SAY[target]}!`, .85);
     hint(target);
   }
 }
@@ -301,10 +320,10 @@ document.addEventListener("keydown", e=>{
 
 // ---------- 点一下重读：大字母读字母，图片/单词读单词 ----------
 letterEl.addEventListener("click",()=>{
-  if (cur.num) return speak(cur.num);
-  if (cur.L){ restart(letterEl,"pop"); speak(SAY[cur.L], .7); }
+  if (cur.num) return say([cur.w], cur.num);
+  if (cur.L){ restart(letterEl,"pop"); say([`l_${cur.L}`], SAY[cur.L], .7); }
 });
-const sayWord = ()=>{ if (cur.word){ restart(picEl,"pop"); speak(cur.word, .7); } };
+const sayWord = ()=>{ if (cur.word){ restart(picEl,"pop"); say([cur.w], cur.word, .7); } };
 picEl.addEventListener("click", sayWord);
 wordEl.addEventListener("click", sayWord);
 
@@ -321,7 +340,7 @@ $("caseBtn").addEventListener("click",e=>{
   else if (/^[A-Z]$/i.test(letterEl.textContent)) letterEl.textContent = caseOf(letterEl.textContent.toUpperCase());
   e.target.blur();
 });
-$("muteBtn").addEventListener("click",e=>{ muted=!muted; e.target.textContent = muted?"🔇":"🔊"; if(muted) speechSynthesis.cancel(); e.target.blur(); });
+$("muteBtn").addEventListener("click",e=>{ muted=!muted; e.target.textContent = muted?"🔇":"🔊"; if(muted){ speechSynthesis.cancel(); playing?.pause(); } e.target.blur(); });
 $("fsBtn").addEventListener("click",e=>{
   if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.();
   e.target.blur();
