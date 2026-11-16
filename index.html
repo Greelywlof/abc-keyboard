@@ -595,13 +595,21 @@ async function toWav16k(blob){
   const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext; // 旧版 iPhone Safari 只有带 webkit 前缀的
   const off = new Off(1, len, 16000);
   const node = off.createBufferSource(); node.buffer = src; node.connect(off.destination); node.start();
-  const pcm = await new Promise((res, rej) => {        // 旧版 Safari 的 startRendering 不返回 Promise
+  let pcm = await new Promise((res, rej) => {        // 旧版 Safari 的 startRendering 不返回 Promise
     off.oncomplete = e => res(e.renderedBuffer.getChannelData(0));
     const p = off.startRendering(); if (p && p.then) p.then(b => res(b.getChannelData(0)), rej);
   });
   // 太小声（几乎没声音）就不送去评测
   let peak = 0; for (let i = 0; i < pcm.length; i += 8) peak = Math.max(peak, Math.abs(pcm[i]));
   if (peak < 0.02) throw new Error("quiet");
+  // 剪掉前后的空白，只留读单词那一段（前后各留 0.25 秒，最长 2.2 秒）：
+  // 腾讯云 HTTP 接口请求最大约 100KB（11-16 实测），整 3 秒的 wav 转成文字后约 128KB 会被拒（413）
+  const th = Math.max(0.02, peak * 0.12);
+  let a = 0, b = pcm.length - 1;
+  while (a < pcm.length && Math.abs(pcm[a]) < th) a++;
+  while (b > a && Math.abs(pcm[b]) < th) b--;
+  a = Math.max(0, a - 4000); b = Math.min(pcm.length, b + 4000, a + 35200);
+  pcm = pcm.subarray(a, b);
   const out = new DataView(new ArrayBuffer(44 + pcm.length * 2));
   const w = (o, s) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
   w(0, "RIFF"); out.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
