@@ -592,9 +592,16 @@ async function toWav16k(blob){
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx(); const src = await ctx.decodeAudioData(buf); ctx.close?.();
   const len = Math.max(1, Math.ceil(src.duration * 16000));
-  const off = new OfflineAudioContext(1, len, 16000);
+  const Off = window.OfflineAudioContext || window.webkitOfflineAudioContext; // 旧版 iPhone Safari 只有带 webkit 前缀的
+  const off = new Off(1, len, 16000);
   const node = off.createBufferSource(); node.buffer = src; node.connect(off.destination); node.start();
-  const pcm = (await off.startRendering()).getChannelData(0);
+  const pcm = await new Promise((res, rej) => {        // 旧版 Safari 的 startRendering 不返回 Promise
+    off.oncomplete = e => res(e.renderedBuffer.getChannelData(0));
+    const p = off.startRendering(); if (p && p.then) p.then(b => res(b.getChannelData(0)), rej);
+  });
+  // 太小声（几乎没声音）就不送去评测
+  let peak = 0; for (let i = 0; i < pcm.length; i += 8) peak = Math.max(peak, Math.abs(pcm[i]));
+  if (peak < 0.02) throw new Error("quiet");
   const out = new DataView(new ArrayBuffer(44 + pcm.length * 2));
   const w = (o, s) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
   w(0, "RIFF"); out.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
@@ -606,23 +613,31 @@ async function toWav16k(blob){
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(bin);
 }
-// 返回 { level 0~3, total, weak } 或 null（没开通、网络不通 → 退回只放示范）
+// 返回 { level 0~3, total, weak }，或 { error: 原因 }（页面上小字显示原因，方便家长排查）
 async function scoreIt(blob, word){
+  let step = "转换录音";
   try {
+    if (!blob || blob.size < 500) return { error: `没录到声音（录音 ${blob ? blob.size : 0} 字节），检查麦克风` };
     const audio = await toWav16k(blob);
-    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 25000);
-    const r = await fetch(SOE_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ word, audio, format:"wav" }), signal: ctl.signal });
+    step = "连接评测";
+    const ctl = window.AbortController ? new AbortController() : null; const tm = setTimeout(() => ctl && ctl.abort(), 25000);
+    const r = await fetch(SOE_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ word, audio, format:"wav" }), signal: ctl ? ctl.signal : undefined });
     clearTimeout(tm);
+    step = `评测返回 ${r.status}`;
     const j = await r.json();
-    if (!j.ok){ console.warn("评测", j.error); return null; }
+    if (!j.ok){ console.warn("评测", j.error); return { error: j.error || step }; }
     return j.data;
-  } catch(e){ console.warn("评测失败", e); return null; }
+  } catch(e){
+    console.warn("评测失败", step, e);
+    if (e && e.message === "quiet") return { level: 0, total: 0, quiet: true };
+    return { error: `${step}出错：${(e && (e.name === "AbortError" ? "超时" : e.message)) || e}（${(blob && blob.type) || "未知格式"}）` };
+  }
 }
 const scoreEl = $("score");
 // 显示星星、分数，没读准的字母标红；配中文语音鼓励，再（放慢）放一遍示范
 async function showScore(r, word, clip){
-  if (!r){
-    scoreEl.innerHTML = `<span class="muted">（这次没打上分，听听标准的对比一下）</span>`;
+  if (!r || r.error){
+    scoreEl.innerHTML = `<span class="muted">（这次没打上分：${String((r && r.error) || "未知原因").replace(/</g, "&lt;")}）</span>`;
     await say([clip], word, .7);
     return;
   }
