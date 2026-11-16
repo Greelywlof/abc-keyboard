@@ -73,7 +73,7 @@ config.AUDIO_BASE = 'cloud://env/audio/';
   await wait(20);
   const today = storage.abc_stats[Object.keys(storage.abc_stats)[0]];
   ok(today.words.length === 1 && today.words[0].toUpperCase() === word, '拼对的单词记进统计');
-  ok(played.includes('zh_ye'), '拼完说「耶」');
+  ok(played.includes('zh_ye_crowd'), '拼完一群人喊「耶」');
 
   // 3. 找字母：按错提示，按对加星
   await wait(4300); // 等拼单词自动换下一个结束

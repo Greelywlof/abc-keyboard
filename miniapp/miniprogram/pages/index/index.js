@@ -129,7 +129,7 @@ Page({
     busy = true;
     stats.today().words.push(spell.word); stats.save();
     this.setData({ prompt: '耶！🎉', stars: this.data.stars + 1, mic: 'hide' });
-    sound.play(['zh_ye', spell.clip, spell.clip]);
+    sound.play(['zh_ye_crowd', spell.clip, spell.clip]); // 一群小朋友一起喊「耶」
     setTimeout(() => { busy = false; if (this.data.mode === 'spell' && !this.data.resting) this.newSpell(); }, 4200);
   },
 
@@ -193,7 +193,7 @@ Page({
     const weakPart = r.weak ? G.splitPart(word, r.weak.letter) : empty;
     this.setData({ result: { level: r.level, starsTxt: '⭐'.repeat(starsN) + '☆'.repeat(3 - starsN), part: weakPart }, stars: this.data.stars + Math.max(1, starsN) });
     if (r.level === 0) return sound.play(['zh_noheard']);
-    if (r.level === 3) return sound.play(['zh_score3']);
+    if (r.level === 3) return sound.play(['zh_ye_crowd', 'zh_score3']);
     await sound.play([r.level === 2 ? 'zh_score2' : 'zh_score1']);
     // 纠音：有对应字母就把那个字母标红，再慢慢放一遍示范
     if (weakPart.hl) await sound.play(['zh_listenpart']);
