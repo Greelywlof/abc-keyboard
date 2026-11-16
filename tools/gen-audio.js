@@ -48,12 +48,13 @@ async function post(p, body) {
 }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-async function synth(text) {
+const VOICE_ZH = process.env.MINIMAX_VOICE_ZH || 'female-tianmei';
+async function synth(text, zh) {
   for (let i = 0; i < 4; i++) {
     try {
       const j = await post('/v1/t2a_v2', {
-        model: MODEL, text, stream: false, language_boost: 'English', output_format: 'hex',
-        voice_setting: { voice_id: VOICE, speed: SPEED, vol: 1, pitch: 0 },
+        model: MODEL, text, stream: false, language_boost: zh ? 'Chinese' : 'English', output_format: 'hex',
+        voice_setting: { voice_id: zh ? VOICE_ZH : VOICE, speed: SPEED, vol: 1, pitch: 0 },
         audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 },
       });
       return Buffer.from(j.data.audio, 'hex');
@@ -83,6 +84,11 @@ function clips() {
   NUM.forEach((n, i) => { c[`n_${i}`] = `${n}.`; });
   PRAISE.forEach((t, i) => { c[`g_${i}`] = t; });
   c.miss = 'Oops! Try again.';
+  // 中文提示：孩子还不认字，屏幕上的中文提示都要能听到（文件名 zh_ 开头用中文音色）
+  c.zh_free = '按键盘上的任何一个字母吧！';
+  c.zh_find = '找一找，这个字母在哪里？';
+  c.zh_try = '不对哦，看看亮起来的那个键！';
+  c.zh_great = '太棒啦！';
   return c;
 }
 
@@ -99,7 +105,7 @@ function clips() {
   for (const [name, text] of all) {
     const f = path.join(OUT, name + '.mp3');
     if (!force && fs.existsSync(f)) { skipped++; continue; }
-    fs.writeFileSync(f, await synth(text));
+    fs.writeFileSync(f, await synth(text, name.startsWith('zh_')));
     made++; process.stdout.write(`\r${made + skipped}/${all.length} ${name}            `);
   }
   console.log(`\n完成：新生成 ${made} 个，跳过 ${skipped} 个。音色 ${VOICE}，模型 ${MODEL}`);

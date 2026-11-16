@@ -34,7 +34,7 @@
     text-shadow:0 8px 0 rgba(0,0,0,.08);
   }
   #pic{font-size:min(22vh,22vw);line-height:1}
-  #letter,#pic,#word{cursor:pointer}
+  #letter,#pic,#word,#prompt{cursor:pointer}
   #word{font-size:min(7vh,8vw);margin-top:8px;letter-spacing:2px;min-height:1.2em;text-align:center}
   #word b{font-size:1.25em}
   #cn{font-size:min(3.4vh,5vw);color:var(--soft);min-height:1.3em}
@@ -155,13 +155,17 @@ function pickVoice(){
   voice = vs.find(v=>/Samantha|Zira|Jenny|Aria|Google US English|Female/i.test(v.name)) || vs[0] || null;
 }
 if ("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text, rate=0.8){
+function speak(text, rate=0.8, zh=""){
   if (muted || !("speechSynthesis" in window)) return;
   speechSynthesis.cancel();
+  if (zh){ const z = new SpeechSynthesisUtterance(zh); z.lang="zh-CN"; z.rate=0.95; speechSynthesis.speak(z); }
+  if (!text) return;
   const u = new SpeechSynthesisUtterance(text);
   u.lang="en-US"; u.rate=rate; u.pitch=1.15; if (voice) u.voice=voice;
   speechSynthesis.speak(u);
 }
+// 中文提示句（和 tools/gen-audio.js 里一致），mp3 缺失时给浏览器中文语音读
+const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一找，这个字母在哪里？", zh_try:"不对哦，看看亮起来的那个键！", zh_great:"太棒啦！" };
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
 function say(clips, text, rate){
@@ -170,7 +174,8 @@ function say(clips, text, rate){
   if (playing){ playing.pause(); playing=null; }
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   let i=0, fell=false;
-  const fallback=()=>{ if (fell || token!==playToken) return; fell=true; speak(text, rate); };
+  const zh = clips.filter(c=>ZH[c]).map(c=>ZH[c]).join("");
+  const fallback=()=>{ if (fell || token!==playToken) return; fell=true; speak(text, rate, zh); };
   const next=()=>{
     if (token!==playToken || i>=clips.length) return;
     const a=new Audio(`audio/${clips[i++]}.mp3`);
@@ -257,9 +262,9 @@ function newTarget(){
   letterEl.textContent = caseOf(t);
   picEl.textContent = "❓";
   wordEl.textContent=""; cnEl.textContent="";
-  promptEl.textContent = "在键盘上找到这个字母！";
+  promptEl.textContent = "🔊 在键盘上找到这个字母！";
   restart(letterEl,"pop");
-  say([`f_${t}`], `Can you find ${SAY[t]}?`);
+  say(["zh_find", `f_${t}`], `Can you find ${SAY[t]}?`);
   // 4 岁小朋友找不到很正常：8 秒后屏幕键盘自动亮起提示
   hintTimer = setTimeout(()=>hint(t), 8000);
 }
@@ -275,12 +280,12 @@ function findPress(L){
     stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
     chime(); confetti();
     const g = Math.floor(Math.random()*PRAISE.length);
-    say([`g_${g}`, `p_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
+    say(["zh_great", `g_${g}`, `p_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
     setTimeout(()=>{ busy=false; newTarget(); }, 3200);
   } else {
     // 按错不扣分，只是轻轻摇一下，然后马上亮提示
     restart(letterEl,"shake"); beep(300,.15,"sine");
-    say([`l_${L}`, `f_${target}`], `That's ${SAY[L]}. Find ${SAY[target]}!`, .85);
+    say([`l_${L}`, "zh_try", `f_${target}`], `That's ${SAY[L]}. Find ${SAY[target]}!`, .85);
     hint(target);
   }
 }
@@ -319,7 +324,11 @@ document.addEventListener("keydown", e=>{
 });
 
 // ---------- 点一下重读：大字母读字母，图片/单词读单词 ----------
+// 找字母时没找到之前点大字母或提示语 = 再听一遍题目
+const repeatQuestion = ()=>{ if (mode==="find" && target && !busy){ restart(letterEl,"pop"); say(["zh_find", `f_${target}`], `Can you find ${SAY[target]}?`); return true; } };
+promptEl.addEventListener("click",()=>{ if (!repeatQuestion() && mode==="free") say(["zh_free"], ""); });
 letterEl.addEventListener("click",()=>{
+  if (repeatQuestion()) return;
   if (cur.num) return say([cur.w], cur.num);
   if (cur.L){ restart(letterEl,"pop"); say([`l_${cur.L}`], SAY[cur.L], .7); }
 });
@@ -349,6 +358,7 @@ $("start").addEventListener("click",()=>{
   $("start").remove();
   document.documentElement.requestFullscreen?.().catch(()=>{});
   freePress("A");
+  setTimeout(()=>{ if (mode==="free") say(["zh_free"], ""); }, 2600); // 开场后用中文告诉她怎么玩
 });
 </script>
 </body>
