@@ -78,6 +78,9 @@
     background:#ff7aa8;color:#fff;box-shadow:0 5px 0 #d94f80;cursor:pointer
   }
   #micBtn[hidden]{display:none}
+  #score{font-size:min(5vh,34px);min-height:1.2em;letter-spacing:4px}
+  #score small{font-size:.55em;color:var(--soft);letter-spacing:0}
+  #word b.weak{color:#e03131;text-decoration:underline;font-size:1.35em}
   #micBtn.rec{background:#e03131;box-shadow:0 5px 0 #a51d1d;animation:glow2 .6s infinite alternate}
   @keyframes glow2{to{transform:scale(1.08)}}
   #rest,#parent{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px}
@@ -148,6 +151,7 @@
   <div id="tiles"></div>
   <div id="word"></div>
   <div id="cn"></div>
+  <div id="score"></div>
   <button id="micBtn" title="跟我读">🎤 跟我读</button>
 </main>
 
@@ -259,7 +263,9 @@ const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一�
   zh_spell:"跟着屏幕，把这个单词一个一个敲出来！", zh_ye:"耶！",
   zh_follow:"听一听，跟我读！", zh_yourturn:"该你读啦！", zh_hear:"听听你读的。",
   zh_1min:"还可以玩一分钟哦！", zh_rest:"今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！",
-  zh_today:"今天你拼对了", zh_words_end:"个单词，真棒！", zh_many:"好多好多" };
+  zh_today:"今天你拼对了", zh_words_end:"个单词，真棒！", zh_many:"好多好多",
+  zh_score3:"哇，读得真标准！", zh_score2:"很不错！有一个音再读清楚一点就更好啦。", zh_score1:"我们再听一遍，慢慢跟着读。",
+  zh_noheard:"没听清楚，大声一点再读一次好吗？", zh_listenpart:"听，这个地方要这样读：" };
 const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "");  // 数字直接给浏览器读
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
@@ -537,7 +543,8 @@ window.addEventListener("pagehide", saveStats);
 const micBtn = $("micBtn");
 let micStream = null, recorder = null, recBusy = false;
 const recs = []; // 这次打开后的录音，只在内存里
-function updateMic(){
+function updateMic(clear = true){
+  if (clear && typeof scoreEl !== "undefined") scoreEl.innerHTML = "";  // 换了字母 / 单词就清掉上次的分数
   const ok = !resting && !busy && cur.word && cur.w && /^w_/.test(cur.w) && (mode==="free" || mode==="spell");
   micBtn.hidden = !ok || !(navigator.mediaDevices && window.MediaRecorder);
 }
@@ -558,22 +565,81 @@ async function followMe(){
     micBtn.classList.add("rec"); micBtn.textContent = "🔴 正在听你读…";
     recorder.start(); setTimeout(stopRec, 3000);
     await stopped;
-    micBtn.classList.remove("rec"); micBtn.textContent = "🎤 跟我读";
+    micBtn.classList.remove("rec"); micBtn.textContent = "🎧 正在打分…";
     const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    const scoring = scoreIt(blob, word);   // 一边回放一边去打分
     const url = URL.createObjectURL(blob);
     recs.unshift({ word, url, time: new Date().toTimeString().slice(0,5) }); if (recs.length > 30) URL.revokeObjectURL(recs.pop().url);
     const t = today(); t.reads++; saveStats();
     await say(["zh_hear"], "");
     if (!muted) await new Promise(r => { const a = new Audio(url); a.onended = r; a.onerror = r; a.play().catch(r); });
-    await say([clip], word, .7);          // 再听一遍标准的，自己对比
-    stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+    const res = await scoring;
+    micBtn.textContent = "🎤 跟我读";
+    recs[0].score = res;
+    await showScore(res, word, clip);
   } catch(e){
     micBtn.classList.remove("rec"); micBtn.textContent = "🎤 跟我读";
     promptEl.textContent = "🎤 麦克风打不开：请在浏览器地址栏左边允许使用麦克风";
   }
-  recBusy = false; busy = false; micBtn.disabled = false; updateMic();
+  recBusy = false; busy = false; micBtn.disabled = false; updateMic(false);
 }
 micBtn.addEventListener("click", e => { e.target.blur(); followMe(); });
+
+// ---------- AI 打分：录音转成 16k 单声道 wav → 腾讯云口语评测（云函数 abcsoe）----------
+const SOE_URL = "https://zhihuixiaoyua-d5gkkwykq944c4980-1399652577.ap-shanghai.app.tcloudbase.com/abc-soe";
+async function toWav16k(blob){
+  const buf = await blob.arrayBuffer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx(); const src = await ctx.decodeAudioData(buf); ctx.close?.();
+  const len = Math.max(1, Math.ceil(src.duration * 16000));
+  const off = new OfflineAudioContext(1, len, 16000);
+  const node = off.createBufferSource(); node.buffer = src; node.connect(off.destination); node.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const out = new DataView(new ArrayBuffer(44 + pcm.length * 2));
+  const w = (o, s) => [...s].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF"); out.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+  out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, 16000, true); out.setUint32(28, 32000, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  w(36, "data"); out.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++){ const s = Math.max(-1, Math.min(1, pcm[i])); out.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  let bin = ""; const bytes = new Uint8Array(out.buffer);
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+// 返回 { level 0~3, total, weak } 或 null（没开通、网络不通 → 退回只放示范）
+async function scoreIt(blob, word){
+  try {
+    const audio = await toWav16k(blob);
+    const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), 25000);
+    const r = await fetch(SOE_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ word, audio, format:"wav" }), signal: ctl.signal });
+    clearTimeout(tm);
+    const j = await r.json();
+    if (!j.ok){ console.warn("评测", j.error); return null; }
+    return j.data;
+  } catch(e){ console.warn("评测失败", e); return null; }
+}
+const scoreEl = $("score");
+// 显示星星、分数，没读准的字母标红；配中文语音鼓励，再（放慢）放一遍示范
+async function showScore(r, word, clip){
+  if (!r){
+    scoreEl.innerHTML = `<span class="muted">（这次没打上分，听听标准的对比一下）</span>`;
+    await say([clip], word, .7);
+    return;
+  }
+  const t = today(); (t.evals = t.evals || []).push({ word, total:r.total, level:r.level, weak: r.weak ? (r.weak.letter || r.weak.phone) : "", t: Date.now() }); saveStats();
+  const lv = r.level;
+  scoreEl.innerHTML = lv === 0 ? "🔇 没听清楚" : `${"⭐".repeat(lv)}${"☆".repeat(3 - lv)} <small>${r.total} 分</small>`;
+  stars += Math.max(1, lv); starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+  // 纠音：评测给出了对应字母，就在单词里把它标红
+  const l = r.weak && r.weak.letter ? String(r.weak.letter).toLowerCase() : "";
+  const i = l ? word.toLowerCase().indexOf(l) : -1;
+  if (lv && lv < 3 && i >= 0) wordEl.innerHTML = `${word.slice(0,i)}<b class="weak">${word.slice(i, i + l.length)}</b>${word.slice(i + l.length)}`;
+  if (lv === 0) return say(["zh_noheard"], "");
+  if (lv === 3){ chime(); confetti(14); return say(["zh_score3"], ""); }
+  await say([lv === 2 ? "zh_score2" : "zh_score1"], "");
+  if (i >= 0) await say(["zh_listenpart"], "");
+  await say([clip], word, .6);
+}
 
 // ---------- 家长面板 ----------
 let gateAns = 0;
@@ -603,7 +669,7 @@ function renderParent(){
   $("pLimit").querySelectorAll("[data-lim]").forEach(b => b.onclick = () => { limitMin = +b.dataset.lim; store.set("abc_limit", limitMin); renderParent(); });
   $("plus5").onclick = () => { today().extra += 5; saveStats(); renderParent(); };
   $("pRecs").innerHTML = recs.length
-    ? recs.map(r => `<div class="recRow">${r.time} <b>${r.word}</b> <audio controls src="${r.url}"></audio></div>`).join("")
+    ? recs.map(r => `<div class="recRow">${r.time} <b>${r.word}</b> ${r.score ? `${"⭐".repeat(r.score.level) || "没听清"} ${r.score.total}分${r.score.weak && r.score.weak.letter ? ` <span style="color:#e03131">要练：${r.score.weak.letter}</span>` : ""}` : `<span class="muted">没打分</span>`} <audio controls src="${r.url}"></audio></div>`).join("")
     : `<p class="muted">还没有录音。录音只保存在这台电脑的内存里，关掉网页就没了。</p>`;
 }
 $("parentBtn").addEventListener("click", e => { e.target.blur(); openParent(); });
@@ -663,7 +729,7 @@ $("start").addEventListener("click",()=>{
   started = true; checkRest();
   if (resting) return;   // 今天的时间已经用完，直接是休息页
   freePress("A");
-  setTimeout(()=>{ if (mode==="free") say(["zh_free"], ""); }, 2600); // 开场后用中文告诉她怎么玩
+  setTimeout(()=>{ if (mode==="free" && !recBusy) say(["zh_free"], ""); }, 2600); // 开场后用中文告诉她怎么玩
 });
 </script>
 </body>

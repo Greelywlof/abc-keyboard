@@ -1,2 +1,6 @@
-﻿.minimax-key
+.minimax-key
 node_modules/
+.soe-key
+cloud/cloudbaserc.json
+cloud/abcsoe/soe.js
+cloud/abcsoe/words.json

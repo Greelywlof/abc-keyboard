@@ -25,17 +25,17 @@ function soeFail(m) {
   console.warn('soe fail', code, msg);
   if (/auth|signature|secret|permission|权限|鉴权|签名/i.test(msg)) return userError('评测密钥不对或没有权限，请家长检查云函数配置');
   if (/open|service|arrear|balance|欠费|开通|额度/i.test(msg)) return userError('评测服务没开通或额度用完了');
-  return userError('评测失败了，再读一次试试');
+  return userError(`评测失败了，再读一次试试（${code}：${msg.slice(0, 80)}）`); // 带上错误码方便排查，不含密钥
 }
 
 // 换成测试用的假连接：test.js 里替换
 let WebSocketImpl = null;
 const WS = () => WebSocketImpl || require('ws');
 
-function evaluate(env, { audio, word, coeff }) {
+function evaluate(env, { audio, word, coeff, format }) {
   if (!env.SOE_SECRET_ID || !env.SOE_SECRET_KEY || !env.SOE_APPID) return Promise.reject(userError('评测还没配置，请家长在云函数环境变量里填写密钥'));
   const url = soeUrl(env, {
-    server_engine_type: '16k_en', voice_id: crypto.randomUUID(), voice_format: 2, // 2 = mp3
+    server_engine_type: '16k_en', voice_id: crypto.randomUUID(), voice_format: format === 'wav' ? 1 : 2, // 1 = wav（网页版），2 = mp3（小程序）
     eval_mode: 0,                       // 0 = 单词模式（有到每个音的结果）
     ref_text: word,
     score_coeff: coeff,                 // 1.0 最宽松（低龄），4.0 最严；4 岁用 1.0
@@ -49,7 +49,7 @@ function evaluate(env, { audio, word, coeff }) {
     const timer = setTimeout(() => finish(userError('评测超时了，再试一次')), 20000);
     const sendAudio = () => {
       if (sent || done) return; sent = true;
-      for (let i = 0; i < audio.length; i += 16384) ws.send(audio.subarray(i, i + 16384));
+      ws.send(audio); // 录音模式（rec_mode=1）只能发一个数据包：整段一次发（11-16 实测分块会报 4015）
       ws.send(JSON.stringify({ type: 'end' }));
     };
     ws.on('open', () => setTimeout(sendAudio, 1500)); // 先等握手消息，1.5 秒没等到也照常发
@@ -64,6 +64,32 @@ function evaluate(env, { audio, word, coeff }) {
   });
 }
 
+// 评测只给音标（如 ae），不给对应字母（11-16 实测 ReferenceLetter 是空的）。
+// 按音标顺序在单词里往后找最可能的拼写，算出每个音对应的字母，用来在单词里把没读准的地方标红。
+const SPELLINGS = {
+  aa: ['o', 'a'], ae: ['a'], ah: ['u', 'o', 'a', 'e'], ao: ['au', 'aw', 'o', 'a'], aw: ['ow', 'ou'], ay: ['igh', 'i', 'y'],
+  b: ['b'], ch: ['ch', 'tch'], d: ['d'], dh: ['th'], eh: ['ea', 'e'], er: ['er', 'ir', 'ur', 'ar', 'or'], ey: ['ai', 'ay', 'a'],
+  f: ['ph', 'f'], g: ['g'], hh: ['wh', 'h'], ih: ['i', 'y', 'e'], iy: ['ee', 'ea', 'ie', 'e', 'y', 'i'], jh: ['j', 'g'],
+  k: ['ck', 'c', 'k', 'q', 'x'], l: ['ll', 'l'], m: ['m'], n: ['n'], ng: ['ng', 'n'], ow: ['oa', 'ow', 'o'], oy: ['oy', 'oi'],
+  p: ['pp', 'p'], r: ['r'], s: ['s', 'c', 'x'], sh: ['sh'], t: ['tt', 't'], th: ['th'], uh: ['oo', 'u'], uw: ['oo', 'ue', 'u'],
+  v: ['v'], w: ['wh', 'w', 'u'], y: ['y'], z: ['z', 's'], zh: ['s'],
+};
+function phoneLetters(word, phones) {
+  const w = String(word).toLowerCase(); let pos = 0, last = null;
+  return phones.map(p => {
+    const key = String(p).toLowerCase().replace(/[^a-z]/g, '');
+    // 结尾的 -le（Apple、Purple）读成「元音 + l」，和拼写顺序相反：元音算在 le 上，不往后挪，留给 l
+    if ((key === 'ah' || key === 'ih') && w.slice(pos) === 'le') { last = word.substr(pos, 2); return last; }
+    let best = null;
+    for (const sp of SPELLINGS[key] || [key]) {
+      const i = w.indexOf(sp, pos);
+      if (i >= 0 && i - pos <= 2 && (!best || i < best.i || (i === best.i && sp.length > best.sp.length))) best = { i, sp };
+    }
+    if (best) { last = word.substr(best.i, best.sp.length); pos = best.i + best.sp.length; return last; }
+    return last || ''; // 找不到（如 Fox 里 k、s 都对应 x）就算在前一个字母上
+  });
+}
+
 // 把评测结果变成孩子能用的：总分 → 三档星星；找出最没读准的那个音，给出对应的字母，用来纠音
 // MatchTag：0 匹配，1 多读，2 漏读，3 读错（以官方文档为准）
 function summarize(r, word) {
@@ -74,6 +100,8 @@ function summarize(r, word) {
     letter: String(p.ReferenceLetter || ''),          // 有的版本会给这个音对应的字母
     score: pct(p.PronAccuracy), tag: Number(p.MatchTag) || 0,
   })));
+  const guess = phoneLetters(word, phones.map(p => p.phone));
+  phones.forEach((p, i) => { if (!p.letter) p.letter = guess[i]; });
   const total = pct(r.SuggestedScore != null ? r.SuggestedScore : r.PronAccuracy);
   const completion = pct(r.PronCompletion);
   // 什么都没读出来（完整度很低）单独提示，不算读得不好
@@ -100,7 +128,8 @@ async function main(event, env) {
   if (audio.length < 1500) throw userError('录音太短了，再读一次');
   if (audio.length > 400000) throw userError('录音太长了');
   const coeff = Math.min(4, Math.max(1, Number(event.coeff) || 1));
-  const r = await evaluate(env, { audio, word, coeff });
+  const format = event.format === 'wav' ? 'wav' : 'mp3';
+  const r = await evaluate(env, { audio, word, coeff, format });
   return summarize(r, word);
 }
 
@@ -108,4 +137,4 @@ exports.main = async event => {
   try { return { ok: true, data: await main(event, process.env) }; }
   catch (e) { if (!e.expose) console.error(e); return { ok: false, error: e.expose ? e.message : '评测出错了，再试一次' }; }
 };
-exports._test = { summarize, soeUrl, main, setWs: w => { WebSocketImpl = w; } };
+exports._test = { phoneLetters, summarize, soeUrl, main, setWs: w => { WebSocketImpl = w; } };

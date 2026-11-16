@@ -53,6 +53,16 @@ const ph = (p, s, tag = 0, letter) => ({ ReferencePhone: p, PronAccuracy: s, Mat
   s = summarize({ SuggestedScore: 85, PronAccuracy: 85, PronCompletion: 0.9, Words: [] }, 'Cat');
   ok(s.completion === 90, '完整度 0.9 → 90');
 
+  // 6b. 音标 → 字母（评测不给字母时自己算）
+  const { phoneLetters } = soe._test;
+  ok(phoneLetters('Cat', ['k', 'ae', 't']).join('|') === 'C|a|t', 'Cat：k→C ae→a t→t');
+  ok(phoneLetters('Fox', ['f', 'aa', 'k', 's']).join('|') === 'F|o|x|x', 'Fox：k、s 都算在 x 上');
+  ok(phoneLetters('Apple', ['ae', 'p', 'ah', 'l']).join('|') === 'A|pp|le|l', 'Apple：双写 pp、结尾 -le');
+  ok(phoneLetters('Elephant', ['eh', 'l', 'ah', 'f', 'ah', 'n', 't']).join('|') === 'E|l|e|ph|a|n|t', 'Elephant：ph');
+  ok(phoneLetters('Queen', ['k', 'w', 'iy', 'n']).join('|') === 'Q|u|ee|n', 'Queen：qu、ee');
+  s = summarize({ SuggestedScore: 32, PronAccuracy: 32, PronCompletion: 1, Words: [{ Word: 'cat', PhoneInfos: [ph('k', 18), ph('ae', 6), ph('t', 70)] }] }, 'Cat');
+  ok(s.weak.letter === 'a', '真实返回里没有字母时，能标出 Cat 的 a');
+
   // 7. 完整流程：音频分片发送，结果解析
   reply = result(88, [ph('k', 90), ph('ae', 86), ph('t', 88)]);
   const audio = Buffer.alloc(40000, 1).toString('base64');
