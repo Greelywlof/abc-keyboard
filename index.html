@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>ABC 字母乐园</title>
+<style>
+  :root{
+    --bg1:#fff7e0; --bg2:#e3f4ff; --ink:#3b3355; --soft:#8a83a3;
+    --key:#ffffff; --key-shadow:#d9d2ea; --hint:#ffd84d; --ok:#5ccf7a; --no:#ff8c8c;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    background:linear-gradient(160deg,var(--bg1),var(--bg2));
+    color:var(--ink);
+    font-family:"Comic Sans MS","Chalkboard SE","Arial Rounded MT Bold","Microsoft YaHei",sans-serif;
+    display:flex;flex-direction:column;user-select:none;
+  }
+  /* 顶部栏：给家长用 */
+  header{display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:wrap}
+  header h1{font-size:22px;margin:0 auto 0 0;letter-spacing:1px}
+  .tab,.tool{
+    border:none;border-radius:999px;padding:8px 16px;font-size:16px;cursor:pointer;
+    background:#fff;color:var(--ink);box-shadow:0 3px 0 var(--key-shadow);font-family:inherit
+  }
+  .tab.on{background:#7c6cf0;color:#fff;box-shadow:0 3px 0 #5646c4}
+  .tool{padding:8px 12px}
+
+  main{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;min-height:0}
+  #stage{display:flex;align-items:center;justify-content:center;gap:5vw;flex-wrap:wrap;padding:0 16px}
+  #letter{
+    font-size:min(34vh,30vw);line-height:1;font-weight:bold;
+    text-shadow:0 8px 0 rgba(0,0,0,.08);
+  }
+  #pic{font-size:min(22vh,22vw);line-height:1}
+  #letter,#pic,#word{cursor:pointer}
+  #word{font-size:min(7vh,8vw);margin-top:8px;letter-spacing:2px;min-height:1.2em;text-align:center}
+  #word b{font-size:1.25em}
+  #cn{font-size:min(3.4vh,5vw);color:var(--soft);min-height:1.3em}
+  #prompt{font-size:min(4.5vh,6vw);color:var(--soft);margin-bottom:6px;min-height:1.3em;text-align:center}
+  #stars{position:absolute;top:6px;right:16px;font-size:28px;max-width:60vw;text-align:right;word-break:break-all}
+
+  .pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes pop{0%{transform:scale(.3) rotate(-12deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+  .shake{animation:shake .4s}
+  @keyframes shake{20%,60%{transform:translateX(-14px)}40%,80%{transform:translateX(14px)}}
+
+  /* 屏幕键盘：和真键盘同样排列，按哪个哪个亮 */
+  #kb{padding:10px 8px 16px;display:flex;flex-direction:column;gap:8px;align-items:center;width:100%}
+  .row{display:flex;gap:6px;justify-content:center}
+  .k{
+    width:min(8.2vw,64px);height:min(8.2vw,64px);border-radius:14px;border:none;
+    background:var(--key);box-shadow:0 5px 0 var(--key-shadow);
+    font-size:min(4.4vw,30px);font-weight:bold;color:var(--ink);cursor:pointer;font-family:inherit;
+    transition:transform .08s, box-shadow .08s, background .2s;
+  }
+  .k:active,.k.down{transform:translateY(4px);box-shadow:0 1px 0 var(--key-shadow)}
+  .k.hint{background:var(--hint);animation:glow 1s infinite alternate}
+  @keyframes glow{to{box-shadow:0 5px 0 #e0b400,0 0 0 8px rgba(255,216,77,.45)}}
+  .k.space{width:min(40vw,320px)}
+
+  .confetti{position:fixed;top:-40px;font-size:32px;pointer-events:none;animation:fall linear forwards;z-index:5}
+  @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
+
+  #start{
+    position:fixed;inset:0;background:rgba(255,247,224,.96);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:20px;z-index:10;cursor:pointer;text-align:center;padding:16px
+  }
+  #start .big{font-size:min(20vh,30vw)}
+  #start .go{font-size:32px;background:#7c6cf0;color:#fff;padding:16px 40px;border-radius:999px;box-shadow:0 6px 0 #5646c4}
+  #start p{color:var(--soft);font-size:18px;margin:0}
+</style>
+</head>
+<body>
+
+<div id="start">
+  <div class="big">🔤</div>
+  <div class="go">▶ 开始玩</div>
+  <p>点一下开始（浏览器需要点一下才能出声音）</p>
+</div>
+
+<header>
+  <h1>🌈 ABC 字母乐园</h1>
+  <button class="tab on" data-mode="free">🎹 随便按</button>
+  <button class="tab" data-mode="find">🔍 找字母</button>
+  <button class="tool" id="caseBtn" title="大写 / 小写">Aa</button>
+  <button class="tool" id="muteBtn" title="声音">🔊</button>
+  <button class="tool" id="fsBtn" title="全屏">⛶</button>
+</header>
+
+<main>
+  <div id="stars"></div>
+  <div id="prompt">按键盘上的任何字母吧！</div>
+  <div id="stage">
+    <div id="letter">A</div>
+    <div id="pic">🍎</div>
+  </div>
+  <div id="word"></div>
+  <div id="cn"></div>
+</main>
+
+<div id="kb"></div>
+
+<script>
+// ---------- 字母数据：每个字母两个简单单词，按一次换一个 ----------
+const DATA = {
+  A:[["Apple","🍎","苹果"],["Ant","🐜","蚂蚁"]],
+  B:[["Ball","⚽","球"],["Bear","🐻","熊"]],
+  C:[["Cat","🐱","猫"],["Car","🚗","汽车"]],
+  D:[["Dog","🐶","狗"],["Duck","🦆","鸭子"]],
+  E:[["Egg","🥚","鸡蛋"],["Elephant","🐘","大象"]],
+  F:[["Fish","🐟","鱼"],["Frog","🐸","青蛙"]],
+  G:[["Grapes","🍇","葡萄"],["Gift","🎁","礼物"]],
+  H:[["Hat","🎩","帽子"],["Horse","🐴","马"]],
+  I:[["Ice cream","🍦","冰淇淋"],["Ice","🧊","冰"]],
+  J:[["Juice","🧃","果汁"],["Jellyfish","🪼","水母"]],
+  K:[["Kite","🪁","风筝"],["Koala","🐨","考拉"]],
+  L:[["Lion","🦁","狮子"],["Lemon","🍋","柠檬"]],
+  M:[["Moon","🌙","月亮"],["Monkey","🐵","猴子"]],
+  N:[["Nose","👃","鼻子"],["Nest","🪺","鸟窝"]],
+  O:[["Orange","🍊","橙子"],["Owl","🦉","猫头鹰"]],
+  P:[["Pig","🐷","小猪"],["Panda","🐼","熊猫"]],
+  Q:[["Queen","👸","女王"],["Quiet","🤫","安静"]],
+  R:[["Rabbit","🐰","兔子"],["Rainbow","🌈","彩虹"]],
+  S:[["Sun","☀️","太阳"],["Star","⭐","星星"]],
+  T:[["Tree","🌳","树"],["Tiger","🐯","老虎"]],
+  U:[["Umbrella","☂️","雨伞"],["Unicorn","🦄","独角兽"]],
+  V:[["Van","🚐","面包车"],["Violin","🎻","小提琴"]],
+  W:[["Whale","🐳","鲸鱼"],["Watermelon","🍉","西瓜"]],
+  X:[["Fox","🦊","狐狸"],["Box","📦","盒子"]],
+  Y:[["Yo-yo","🪀","悠悠球"],["Yellow","💛","黄色"]],
+  Z:[["Zebra","🦓","斑马"],["Zero","0️⃣","零"]],
+};
+// 让语音读字母名而不是读成单词（如 A 被读成冠词 "uh"）
+const SAY = {A:"ay",B:"bee",C:"see",D:"dee",E:"ee",F:"eff",G:"gee",H:"aitch",I:"eye",J:"jay",K:"kay",L:"el",M:"em",
+  N:"en",O:"oh",P:"pee",Q:"cue",R:"are",S:"ess",T:"tee",U:"you",V:"vee",W:"double you",X:"ex",Y:"why",Z:"zee"};
+const NUM_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine"];
+const NUM_CN = ["零","一","二","三","四","五","六","七","八","九"];
+const COLORS = ["#ff6b6b","#ff9f43","#f7b731","#26de81","#2bcbba","#45aaf2","#4b7bec","#a55eea","#fd79a8"];
+const PRAISE = ["Great job!","Well done!","Yay!","Super!","You did it!","Awesome!"];
+
+const $ = id => document.getElementById(id);
+const letterEl=$("letter"), picEl=$("pic"), wordEl=$("word"), cnEl=$("cn"), promptEl=$("prompt"), starsEl=$("stars");
+
+let mode="free", upper=true, muted=false, idx={}, target=null, hintTimer=null, stars=0, busy=false;
+let cur = {L:null, word:null, num:null};   // 当前屏幕上的字母/单词，点一下可以重读
+
+// ---------- 声音 ----------
+let voice=null;
+function pickVoice(){
+  const vs = speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang));
+  // 优先选女声/常见好听的英文语音
+  voice = vs.find(v=>/Samantha|Zira|Jenny|Aria|Google US English|Female/i.test(v.name)) || vs[0] || null;
+}
+if ("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text, rate=0.8){
+  if (muted || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang="en-US"; u.rate=rate; u.pitch=1.15; if (voice) u.voice=voice;
+  speechSynthesis.speak(u);
+}
+let actx=null;
+function beep(freq=660, dur=.12, type="sine"){
+  if (muted) return;
+  try{
+    actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type=type; o.frequency.value=freq; g.gain.value=.15;
+    g.gain.exponentialRampToValueAtTime(.001, actx.currentTime+dur);
+    o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+function chime(){ [523,659,784,1046].forEach((f,i)=>setTimeout(()=>beep(f,.18,"triangle"),i*90)); }
+
+// ---------- 画面 ----------
+function restart(el, cls){ el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function caseOf(L){ return upper ? L : L.toLowerCase(); }
+function wordHTML(word, L){
+  // 把单词里的这个字母加粗上色，X 在 Fox 里就是结尾那个
+  const i = word.toUpperCase().indexOf(L);
+  if (i<0) return word;
+  return word.slice(0,i)+`<b style="color:${letterEl.style.color}">${word[i]}</b>`+word.slice(i+1);
+}
+function showLetter(L){
+  const list = DATA[L]; idx[L] = ((idx[L] ?? -1)+1) % list.length;
+  const [word, emoji, cn] = list[idx[L]];
+  letterEl.style.color = COLORS[Math.floor(Math.random()*COLORS.length)];
+  letterEl.textContent = caseOf(L);
+  cur = {L, word};
+  picEl.textContent = emoji;
+  wordEl.innerHTML = wordHTML(word, L);
+  cnEl.textContent = cn;
+  restart(letterEl,"pop"); restart(picEl,"pop");
+  return word;
+}
+function showNumber(n){
+  letterEl.style.color = COLORS[n % COLORS.length];
+  letterEl.textContent = n;
+  picEl.textContent = n===0 ? "🫙" : "⭐".repeat(n);
+  picEl.style.fontSize = n>3 ? "min(9vh,9vw)" : "";
+  wordEl.textContent = NUM_WORDS[n]; cnEl.textContent = NUM_CN[n];
+  cur = {L:null, word:NUM_WORDS[n], num:NUM_WORDS[n]};
+  restart(letterEl,"pop"); restart(picEl,"pop");
+  speak(NUM_WORDS[n]);
+}
+function confetti(n=18){
+  const bits=["🎉","⭐","🌟","🎈","💖","✨"];
+  for(let i=0;i<n;i++){
+    const s=document.createElement("div"); s.className="confetti";
+    s.textContent=bits[i%bits.length];
+    s.style.left=Math.random()*100+"vw";
+    s.style.animationDuration=(1.6+Math.random()*1.4)+"s";
+    document.body.appendChild(s); setTimeout(()=>s.remove(),3200);
+  }
+}
+function flashKey(L){
+  const k=document.querySelector(`.k[data-k="${L}"]`); if(!k) return;
+  k.classList.add("down"); setTimeout(()=>k.classList.remove("down"),150);
+}
+function clearHint(){ clearTimeout(hintTimer); document.querySelectorAll(".k.hint").forEach(k=>k.classList.remove("hint")); }
+function hint(L){ const k=document.querySelector(`.k[data-k="${L}"]`); if(k) k.classList.add("hint"); }
+
+// ---------- 两种玩法 ----------
+function freePress(L){
+  picEl.style.fontSize="";
+  const word = showLetter(L);
+  speak(`${SAY[L]}. ${SAY[L]} is for ${word}.`);
+}
+
+const LETTERS = Object.keys(DATA);
+function newTarget(){
+  clearHint();
+  let t; do { t = LETTERS[Math.floor(Math.random()*26)]; } while (t===target);
+  target = t; cur = {L:t, word:null};
+  picEl.style.fontSize="";
+  letterEl.style.color = COLORS[Math.floor(Math.random()*COLORS.length)];
+  letterEl.textContent = caseOf(t);
+  picEl.textContent = "❓";
+  wordEl.textContent=""; cnEl.textContent="";
+  promptEl.textContent = "在键盘上找到这个字母！";
+  restart(letterEl,"pop");
+  speak(`Can you find ${SAY[t]}?`);
+  // 4 岁小朋友找不到很正常：8 秒后屏幕键盘自动亮起提示
+  hintTimer = setTimeout(()=>hint(t), 8000);
+}
+function findPress(L){
+  if (busy) return;
+  if (L===target){
+    busy=true; clearHint();
+    const [word, emoji, cn] = DATA[L][0];
+    picEl.textContent = emoji; wordEl.innerHTML = wordHTML(word,L); cnEl.textContent = cn;
+    cur = {L, word};
+    restart(picEl,"pop");
+    promptEl.textContent = "太棒啦！🎉";
+    stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+    chime(); confetti();
+    speak(`${PRAISE[Math.floor(Math.random()*PRAISE.length)]} ${SAY[L]} is for ${word}.`);
+    setTimeout(()=>{ busy=false; newTarget(); }, 3200);
+  } else {
+    // 按错不扣分，只是轻轻摇一下，然后马上亮提示
+    restart(letterEl,"shake"); beep(300,.15,"sine");
+    speak(`That's ${SAY[L]}. Find ${SAY[target]}!`, .85);
+    hint(target);
+  }
+}
+
+function press(L){
+  flashKey(L);
+  if (/^[0-9]$/.test(L)){ if (mode==="free") showNumber(+L); return; }
+  if (!DATA[L]) return;
+  mode==="free" ? freePress(L) : findPress(L);
+}
+
+// ---------- 屏幕键盘（和真键盘同样的位置） ----------
+const ROWS = ["1234567890","QWERTYUIOP","ASDFGHJKL","ZXCVBNM"];
+const kb=$("kb");
+ROWS.forEach(r=>{
+  const row=document.createElement("div"); row.className="row";
+  [...r].forEach(c=>{
+    const b=document.createElement("button"); b.className="k"; b.dataset.k=c;
+    b.textContent = caseOf(c);
+    b.addEventListener("pointerdown", e=>{ e.preventDefault(); press(c); });
+    row.appendChild(b);
+  });
+  kb.appendChild(row);
+});
+function refreshKeys(){ document.querySelectorAll(".k").forEach(k=>k.textContent=caseOf(k.dataset.k)); }
+
+// ---------- 真键盘 ----------
+document.addEventListener("keydown", e=>{
+  if (e.ctrlKey || e.metaKey || e.altKey) return;   // 留给家长的快捷键
+  if (e.key==="F11" || e.key==="Escape" || e.key==="Tab") return;
+  e.preventDefault();                               // 防止小朋友乱按触发浏览器功能
+  if (e.repeat) return;                             // 按住不放不重复刷屏
+  const k = e.key.length===1 ? e.key.toUpperCase() : "";
+  if (k && (DATA[k] || /[0-9]/.test(k))) press(k);
+  else { beep(400+Math.random()*400,.1,"triangle"); restart(letterEl,"shake"); } // 空格、回车等：给个小音效
+});
+
+// ---------- 点一下重读：大字母读字母，图片/单词读单词 ----------
+letterEl.addEventListener("click",()=>{
+  if (cur.num) return speak(cur.num);
+  if (cur.L){ restart(letterEl,"pop"); speak(SAY[cur.L], .7); }
+});
+const sayWord = ()=>{ if (cur.word){ restart(picEl,"pop"); speak(cur.word, .7); } };
+picEl.addEventListener("click", sayWord);
+wordEl.addEventListener("click", sayWord);
+
+// ---------- 家长按钮 ----------
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); t.classList.add("on");
+  mode=t.dataset.mode; clearHint(); busy=false; t.blur();
+  if (mode==="find"){ newTarget(); }
+  else { target=null; promptEl.textContent="按键盘上的任何字母吧！"; freePress("A"); }
+}));
+$("caseBtn").addEventListener("click",e=>{
+  upper=!upper; e.target.textContent = upper ? "Aa" : "aA"; refreshKeys();
+  if (mode==="find" && target) letterEl.textContent = caseOf(target);
+  else if (/^[A-Z]$/i.test(letterEl.textContent)) letterEl.textContent = caseOf(letterEl.textContent.toUpperCase());
+  e.target.blur();
+});
+$("muteBtn").addEventListener("click",e=>{ muted=!muted; e.target.textContent = muted?"🔇":"🔊"; if(muted) speechSynthesis.cancel(); e.target.blur(); });
+$("fsBtn").addEventListener("click",e=>{
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.();
+  e.target.blur();
+});
+$("start").addEventListener("click",()=>{
+  $("start").remove();
+  document.documentElement.requestFullscreen?.().catch(()=>{});
+  freePress("A");
+});
+</script>
+</body>
+</html>
