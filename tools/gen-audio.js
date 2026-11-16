@@ -89,6 +89,8 @@ function clips() {
   c.zh_find = '找一找，这个字母在哪里？';
   c.zh_try = '不对哦，看看亮起来的那个键！';
   c.zh_great = '太棒啦！';
+  c.zh_spell = '跟着屏幕，把这个单词一个一个敲出来！';
+  c.zh_ye = '耶！';
   return c;
 }
 

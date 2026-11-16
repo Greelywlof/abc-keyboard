@@ -60,6 +60,17 @@
   @keyframes glow{to{box-shadow:0 5px 0 #e0b400,0 0 0 8px rgba(255,216,77,.45)}}
   .k.space{width:min(40vw,320px)}
 
+  /* 拼单词：每个字母一个格子，敲对的变彩色，当前要敲的那格在跳 */
+  #tiles{display:flex;gap:min(1.6vw,12px);justify-content:center;flex-wrap:wrap;margin-top:6px}
+  #tiles:empty{display:none}
+  .tile{
+    width:min(11vw,84px);height:min(13vw,100px);border-radius:16px;background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:min(8vw,62px);font-weight:bold;
+    color:#c9c3dc;box-shadow:0 5px 0 var(--key-shadow);transition:background .2s,color .2s
+  }
+  .tile.done{color:#fff}
+  .tile.now{color:var(--ink);outline:5px solid var(--hint);animation:bob .8s infinite alternate}
+  @keyframes bob{to{transform:translateY(-8px)}}
   .confetti{position:fixed;top:-40px;font-size:32px;pointer-events:none;animation:fall linear forwards;z-index:5}
   @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
 
@@ -84,6 +95,7 @@
   <h1>🌈 ABC 字母乐园</h1>
   <button class="tab on" data-mode="free">🎹 随便按</button>
   <button class="tab" data-mode="find">🔍 找字母</button>
+  <button class="tab" data-mode="spell">✏️ 拼单词</button>
   <button class="tool" id="caseBtn" title="大写 / 小写">Aa</button>
   <button class="tool" id="muteBtn" title="声音">🔊</button>
   <button class="tool" id="fsBtn" title="全屏">⛶</button>
@@ -91,11 +103,12 @@
 
 <main>
   <div id="stars"></div>
-  <div id="prompt">按键盘上的任何字母吧！</div>
+  <div id="prompt">🔊 按键盘上的任何字母吧！</div>
   <div id="stage">
     <div id="letter">A</div>
     <div id="pic">🍎</div>
   </div>
+  <div id="tiles"></div>
   <div id="word"></div>
   <div id="cn"></div>
 </main>
@@ -165,7 +178,8 @@ function speak(text, rate=0.8, zh=""){
   speechSynthesis.speak(u);
 }
 // 中文提示句（和 tools/gen-audio.js 里一致），mp3 缺失时给浏览器中文语音读
-const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一找，这个字母在哪里？", zh_try:"不对哦，看看亮起来的那个键！", zh_great:"太棒啦！" };
+const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一找，这个字母在哪里？", zh_try:"不对哦，看看亮起来的那个键！", zh_great:"太棒啦！",
+  zh_spell:"跟着屏幕，把这个单词一个一个敲出来！", zh_ye:"耶！" };
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
 function say(clips, text, rate){
@@ -290,11 +304,60 @@ function findPress(L){
   }
 }
 
+// ---------- 拼单词：照着屏幕把整个单词敲出来 ----------
+// 只用纯字母、不太长的词（去掉 Ice cream、Yo-yo、Watermelon 这类）
+const SPELL = [];
+for (const L of LETTERS) DATA[L].forEach(([w],i)=>{ if (/^[A-Za-z]+$/.test(w) && w.length<=6) SPELL.push({L,i}); });
+const tilesEl=$("tiles");
+let spell=null; // {word, emoji, cn, clip, pos}
+function newSpell(){
+  clearHint(); picEl.style.fontSize="";
+  let p; do { p = SPELL[Math.floor(Math.random()*SPELL.length)]; } while (spell && spell.clip===`w_${p.L}${p.i}`);
+  const [word, emoji, cn] = DATA[p.L][p.i];
+  spell = {word:word.toUpperCase(), emoji, cn, clip:`w_${p.L}${p.i}`, pos:0, color:COLORS[Math.floor(Math.random()*COLORS.length)]};
+  cur = {L:null, word, w:spell.clip};
+  letterEl.textContent=""; picEl.textContent=emoji; wordEl.textContent=""; cnEl.textContent=cn;
+  promptEl.textContent="🔊 把这个单词敲出来！";
+  restart(picEl,"pop");
+  drawTiles();
+  say(["zh_spell", spell.clip], word);
+}
+function drawTiles(){
+  tilesEl.innerHTML="";
+  [...spell.word].forEach((c,i)=>{
+    const t=document.createElement("div");
+    t.className="tile"+(i<spell.pos?" done":"")+(i===spell.pos?" now":"");
+    if (i<spell.pos) t.style.background=spell.color;
+    t.textContent=caseOf(c);
+    t.addEventListener("click",()=>say([`l_${c}`], SAY[c], .7));   // 点格子听这个字母
+    tilesEl.appendChild(t);
+  });
+  clearHint();
+  if (spell.pos<spell.word.length) hint(spell.word[spell.pos]);  // 下一个要敲的键一直亮着
+}
+function spellPress(L){
+  if (busy || !spell) return;
+  const need = spell.word[spell.pos];
+  if (L!==need){
+    restart(tilesEl,"shake"); beep(300,.15,"sine");
+    say([`l_${need}`], SAY[need], .8);   // 不扣分，只告诉她该敲哪个
+    return;
+  }
+  spell.pos++; drawTiles(); beep(520+spell.pos*60,.1,"triangle");
+  if (spell.pos < spell.word.length){ say([`l_${L}`], SAY[L], .9); return; }
+  // 全部敲完：耶！+ 彩带 + 读整个单词
+  busy=true;
+  stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+  promptEl.textContent="耶！🎉"; chime(); confetti(26);
+  say(["zh_ye", spell.clip, spell.clip], `Yay! ${cur.word}!`);
+  setTimeout(()=>{ busy=false; if (mode==="spell") newSpell(); }, 4200);
+}
+
 function press(L){
   flashKey(L);
   if (/^[0-9]$/.test(L)){ if (mode==="free") showNumber(+L); return; }
   if (!DATA[L]) return;
-  mode==="free" ? freePress(L) : findPress(L);
+  if (mode==="free") freePress(L); else if (mode==="find") findPress(L); else spellPress(L);
 }
 
 // ---------- 屏幕键盘（和真键盘同样的位置） ----------
@@ -326,7 +389,11 @@ document.addEventListener("keydown", e=>{
 // ---------- 点一下重读：大字母读字母，图片/单词读单词 ----------
 // 找字母时没找到之前点大字母或提示语 = 再听一遍题目
 const repeatQuestion = ()=>{ if (mode==="find" && target && !busy){ restart(letterEl,"pop"); say(["zh_find", `f_${target}`], `Can you find ${SAY[target]}?`); return true; } };
-promptEl.addEventListener("click",()=>{ if (!repeatQuestion() && mode==="free") say(["zh_free"], ""); });
+promptEl.addEventListener("click",()=>{
+  if (repeatQuestion()) return;
+  if (mode==="spell" && spell && !busy) say(["zh_spell", spell.clip], cur.word);
+  else if (mode==="free") say(["zh_free"], "");
+});
 letterEl.addEventListener("click",()=>{
   if (repeatQuestion()) return;
   if (cur.num) return say([cur.w], cur.num);
@@ -340,12 +407,15 @@ wordEl.addEventListener("click", sayWord);
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); t.classList.add("on");
   mode=t.dataset.mode; clearHint(); busy=false; t.blur();
+  tilesEl.innerHTML=""; spell=null; target=null;
   if (mode==="find"){ newTarget(); }
-  else { target=null; promptEl.textContent="按键盘上的任何字母吧！"; freePress("A"); }
+  else if (mode==="spell"){ newSpell(); }
+  else { promptEl.textContent="🔊 按键盘上的任何字母吧！"; freePress("A"); }
 }));
 $("caseBtn").addEventListener("click",e=>{
   upper=!upper; e.target.textContent = upper ? "Aa" : "aA"; refreshKeys();
-  if (mode==="find" && target) letterEl.textContent = caseOf(target);
+  if (mode==="spell" && spell) drawTiles();
+  else if (mode==="find" && target) letterEl.textContent = caseOf(target);
   else if (/^[A-Z]$/i.test(letterEl.textContent)) letterEl.textContent = caseOf(letterEl.textContent.toUpperCase());
   e.target.blur();
 });
