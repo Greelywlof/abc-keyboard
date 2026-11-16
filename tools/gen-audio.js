@@ -12,7 +12,15 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'audio');
+// 声音包：VOICE_PACK=teacher → 生成到 audio/teacher/，用 PACKS 里定的中英文音色；不设就是原来的 audio/（甜美）
+// 男声夸奖 m_* 和群喊「耶」各声音包共用，只在 audio/ 根目录生成一份
+const PACKS = {
+  teacher: { en: 'English_Graceful_Lady', zh: 'Chinese (Mandarin)_News_Anchor' }, // 11-16 用户选：英式优雅女士 + 新闻女声
+};
+const PACK = process.env.VOICE_PACK || '';
+if (PACK && !PACKS[PACK]) { console.log('没有这个声音包：' + PACK); process.exit(1); }
+if (PACK) { process.env.MINIMAX_VOICE = PACKS[PACK].en; process.env.MINIMAX_VOICE_ZH = PACKS[PACK].zh; }
+const OUT = path.join(ROOT, 'audio', PACK);
 const keyFile = path.join(ROOT, '.minimax-key');
 if (!process.env.MINIMAX_API_KEY && fs.existsSync(keyFile)) process.env.MINIMAX_API_KEY = (fs.readFileSync(keyFile, 'utf8').replace(/^﻿/, '').split(/\r?\n/).map(s => s.trim()).find(s => s && !s.startsWith('#')) || '');
 const KEY = process.env.MINIMAX_API_KEY;
@@ -139,7 +147,7 @@ function clips() {
   }
   const force = process.argv.includes('--force');
   fs.mkdirSync(OUT, { recursive: true });
-  const all = Object.entries(clips());
+  const all = Object.entries(clips()).filter(([n]) => !PACK || !/^m_/.test(n)); // 声音包里不重复生成共用的男声
   let made = 0, skipped = 0;
   for (const [name, text] of all) {
     const f = path.join(OUT, name + '.mp3');

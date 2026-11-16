@@ -1,5 +1,6 @@
 // 家长页：先答一道乘法题（4 岁孩子打不开）→ 今天的统计、最近 7 天、每天时长、最近的跟读评测
 const stats = require('../../utils/stats');
+const sound = require('../../utils/sound');
 const { EVAL_PER_DAY } = require('../../config');
 
 Page({
@@ -44,10 +45,17 @@ Page({
     const emoji = {}; Object.values(require('../../utils/words')).forEach(list => list.forEach(([w, e]) => { emoji[w] = e; }));
     const learned = Object.keys(a.learned || {}).sort((x, y) => a.learned[y] - a.learned[x]).map(w => ({ w, e: emoji[w] || '', n: a.learned[w] }));
     this.setData({
+      voices: sound.VOICE_PACKS.map(p => ({ id: p.id, name: p.name })), voice: sound.packId(),
       aCards, badges, cal, learned,
       cards, words: uniq.length ? `今天拼过：${uniq.join('、')}` : '今天还没有拼单词。', bars,
       limit: stats.limitMin(), extra: t.extra, evals, evalLeft: Math.max(0, EVAL_PER_DAY - t.evals.length),
     });
+  },
+  // 换声音包，并试听一句
+  setVoice(e) {
+    sound.setPack(e.currentTarget.dataset.v);
+    this.setData({ voice: sound.packId() });
+    sound.play(['zh_follow', 'w_A0', 'c_A0']);
   },
   setLimit(e) { stats.setLimit(+e.currentTarget.dataset.m); this.render(); },
   plus5() { stats.today().extra += 5; stats.save(); this.render(); wx.showToast({ title: '今天加了 5 分钟', icon: 'none' }); },

@@ -49,6 +49,11 @@
     </view>
     <view class="muted">今天还能评测 {{evalLeft}} 次（在 config.js 里改上限）。分数供参考：4 岁孩子读单个单词，评测会有波动。</view>
 
+    <view class="h2">🔈 声音</view>
+    <view class="limits">
+      <view wx:for="{{voices}}" wx:key="id" class="lim {{item.id==voice?'on':''}}" data-v="{{item.id}}" bindtap="setVoice">{{item.name}}</view>
+    </view>
+
     <view class="h2">⏱ 每天能玩多久</view>
     <view class="limits">
       <view wx:for="{{limits}}" wx:key="*this" class="lim {{item==limit?'on':''}}" data-m="{{item}}" bindtap="setLimit">{{item}} 分钟</view>

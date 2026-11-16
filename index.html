@@ -329,7 +329,10 @@ function unlockAudio(){   // 必须在用户点击里调用
   try { const b = c.createBuffer(1, 1, 22050), s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch(e){}
 }
 // 声音包：设置里可以换（家长面板「🔈 声音」）；男声夸奖、群喊「耶」各声音包共用
-const VOICE_PACKS = [{ id: "sweet", name: "甜美女声（原来的）", dir: "audio/" }];
+const VOICE_PACKS = [   // 第一个是默认（11-16 用户选：中文新闻女声 + 英文英式优雅女士）
+  { id: "teacher", name: "👩‍🏫 老师（默认）", dir: "audio/teacher/" },
+  { id: "sweet", name: "甜美女声（原来的）", dir: "audio/" },
+];
 const SHARED = c => /^m_/.test(c) || c === "zh_ye_crowd";
 let voicePack = (() => { try { return localStorage.getItem("abc_voice") || VOICE_PACKS[0].id; } catch(e){ return VOICE_PACKS[0].id; } })();
 const clipUrl = c => (SHARED(c) ? "audio/" : (VOICE_PACKS.find(p => p.id === voicePack) || VOICE_PACKS[0]).dir) + c + ".mp3";

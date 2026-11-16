@@ -135,6 +135,7 @@ ok(played.includes('m_nicetry'), '68 分：男声 Nice try');
   ok(Q.data.ok && Q.data.cards[0].n === 1, '答对进入，显示拼对 1 个单词');
   ok(Q.data.evals.length === 3 && Q.data.cards.find(c => c.s === '跟读平均分').n === 85, '跟读评测 3 条（含拼完再读那次），平均分 (95+68+91)/3≈85');
   ok(Q.data.bars.length === 7 && Q.data.bars[6].n === 1, '7 天柱状图，今天 1');
+ok(Q.data.voices.length === 2 && Q.data.voice === 'teacher', '声音默认是老师');  played.length = 0; Q.setVoice({ currentTarget: { dataset: { v: 'sweet' } } }); await wait(20);  ok(Q.data.voice === 'sweet' && storage.abc_voice === 'sweet', '家长切换到甜美女声');  const snd = require(path.join(MP, 'utils/sound'));  ok(snd.srcOf('zh_find') === 'cloud://env/audio/zh_find.mp3' && snd.srcOf('m_good') === 'cloud://env/audio/m_good.mp3', '甜美包从 audio/ 根目录取');  Q.setVoice({ currentTarget: { dataset: { v: 'teacher' } } });  ok(snd.srcOf('zh_find') === 'cloud://env/audio/teacher/zh_find.mp3' && snd.srcOf('m_good') === 'cloud://env/audio/m_good.mp3', '老师包从 teacher/ 取，男声共用根目录');
 
   // 8. 限时：剩 1 分钟提醒，到点休息，家长加时间后恢复
   require(path.join(MP, 'pages/index/index')); // 已加载过，重新挂一个实例看时间

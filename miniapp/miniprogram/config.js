@@ -5,6 +5,11 @@ module.exports = {
   // 发音 mp3 放在哪：把仓库根目录的 audio/ 整个上传到云存储根目录后，
   // 填「云存储里 audio 文件夹的 File ID 前缀」，形如 'cloud://xxx-1234.7878-xxx-1234-1300000000/audio/'
   AUDIO_BASE: '',
+  // 声音包：上传时保留 audio/ 里的子文件夹（teacher/）。第一个是默认，家长页可以换
+  VOICE_PACKS: [
+    { id: 'teacher', name: '👩‍🏫 老师（默认）', dir: 'teacher/' },
+    { id: 'sweet', name: '甜美女声（原来的）', dir: '' },
+  ],
   // 每天最多评测几次（控制费用；家长页能看到用了几次）
   EVAL_PER_DAY: 60,
 };
