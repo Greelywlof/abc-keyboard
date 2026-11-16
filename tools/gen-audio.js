@@ -14,7 +14,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, 'audio');
 const keyFile = path.join(ROOT, '.minimax-key');
-if (!process.env.MINIMAX_API_KEY && fs.existsSync(keyFile)) process.env.MINIMAX_API_KEY = fs.readFileSync(keyFile, 'utf8').trim().split(/\r?\n/)[0];
+if (!process.env.MINIMAX_API_KEY && fs.existsSync(keyFile)) process.env.MINIMAX_API_KEY = (fs.readFileSync(keyFile, 'utf8').replace(/^﻿/, '').split(/\r?\n/).map(s => s.trim()).find(s => s && !s.startsWith('#')) || '');
 const KEY = process.env.MINIMAX_API_KEY;
 if (!KEY) { console.log('没找到 MiniMax Key：设环境变量 MINIMAX_API_KEY，或放到 .minimax-key'); process.exit(1); }
 
@@ -91,6 +91,11 @@ function clips() {
   c.zh_great = '太棒啦！';
   c.zh_spell = '跟着屏幕，把这个单词一个一个敲出来！';
   c.zh_ye = '耶！';
+  c.zh_follow = '听一听，跟我读！';
+  c.zh_yourturn = '该你读啦！';
+  c.zh_hear = '听听你读的。';
+  c.zh_1min = '还可以玩一分钟哦！';
+  c.zh_rest = '今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！';
   return c;
 }
 

@@ -71,6 +71,41 @@
   .tile.done{color:#fff}
   .tile.now{color:var(--ink);outline:5px solid var(--hint);animation:bob .8s infinite alternate}
   @keyframes bob{to{transform:translateY(-8px)}}
+  #timeLeft{font-size:15px;color:var(--soft);white-space:nowrap}
+  #timeLeft.low{color:#e8590c;font-weight:bold}
+  #micBtn{
+    margin-top:10px;border:none;border-radius:999px;padding:12px 28px;font-size:min(4vh,26px);font-family:inherit;
+    background:#ff7aa8;color:#fff;box-shadow:0 5px 0 #d94f80;cursor:pointer
+  }
+  #micBtn[hidden]{display:none}
+  #micBtn.rec{background:#e03131;box-shadow:0 5px 0 #a51d1d;animation:glow2 .6s infinite alternate}
+  @keyframes glow2{to{transform:scale(1.08)}}
+  #rest,#parent{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:16px}
+  #rest[hidden],#parent[hidden]{display:none}
+  #rest{background:linear-gradient(160deg,#dfe7ff,#f3e8ff);flex-direction:column;text-align:center;gap:8px}
+  #rest .big{font-size:min(24vh,40vw)}
+  #rest h2{font-size:min(6vh,9vw);margin:0}
+  #rest p{font-size:min(3.6vh,5vw);color:var(--soft);margin:0}
+  .restStats{font-size:min(3.4vh,5vw);margin-top:12px}
+  #parent{background:rgba(40,30,70,.45)}
+  .panel{background:#fff;border-radius:20px;padding:20px 22px;width:min(640px,100%);max-height:92vh;overflow:auto;position:relative;user-select:text}
+  .panel h2{margin:0 0 10px} .panel h3{margin:18px 0 8px;font-size:17px}
+  .panel .close{position:absolute;top:10px;right:12px;border:none;background:none;font-size:22px;cursor:pointer;color:var(--soft)}
+  .panel input{font-size:22px;width:120px;padding:6px 10px;border-radius:10px;border:2px solid var(--key-shadow);margin-right:8px;font-family:inherit}
+  .muted{color:var(--soft);font-size:13px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+  .card{background:#f6f3ff;border-radius:14px;padding:10px;text-align:center}
+  .card b{display:block;font-size:28px;color:#7c6cf0} .card span{font-size:13px;color:var(--soft)}
+  #pWords{margin-top:8px;font-size:14px;color:var(--soft)}
+  .bars{display:flex;align-items:flex-end;gap:8px;height:130px;padding-top:18px}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:12px;color:var(--soft)}
+  .bar i{display:block;width:100%;max-width:42px;background:#7c6cf0;border-radius:8px 8px 0 0;min-height:2px;position:relative}
+  .bar i::before{content:attr(data-n);position:absolute;top:-17px;left:0;right:0;text-align:center;color:var(--ink);font-style:normal;font-size:12px}
+  .bar.today i{background:#ff7aa8}
+  .limits{display:flex;gap:6px;flex-wrap:wrap}
+  .limits .tab{font-size:14px;padding:6px 12px}
+  .recRow{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:14px;flex-wrap:wrap}
+  .recRow audio{height:32px}
   .confetti{position:fixed;top:-40px;font-size:32px;pointer-events:none;animation:fall linear forwards;z-index:5}
   @keyframes fall{to{transform:translateY(110vh) rotate(540deg)}}
 
@@ -96,6 +131,8 @@
   <button class="tab on" data-mode="free">🎹 随便按</button>
   <button class="tab" data-mode="find">🔍 找字母</button>
   <button class="tab" data-mode="spell">✏️ 拼单词</button>
+  <span id="timeLeft" title="今天还能玩多久"></span>
+  <button class="tool" id="parentBtn" title="家长：统计和设置">👪</button>
   <button class="tool" id="caseBtn" title="大写 / 小写">Aa</button>
   <button class="tool" id="muteBtn" title="声音">🔊</button>
   <button class="tool" id="fsBtn" title="全屏">⛶</button>
@@ -111,7 +148,41 @@
   <div id="tiles"></div>
   <div id="word"></div>
   <div id="cn"></div>
+  <button id="micBtn" title="跟我读">🎤 跟我读</button>
 </main>
+
+<!-- 时间到了：休息页 -->
+<div id="rest" hidden>
+  <div class="big">😴</div>
+  <h2>今天的时间用完啦</h2>
+  <p>让小眼睛休息一下，明天再来玩吧！</p>
+  <div class="restStats" id="restStats"></div>
+</div>
+
+<!-- 家长面板：先答一道乘法题才能进（4 岁孩子打不开） -->
+<div id="parent" hidden>
+  <div class="panel">
+    <button class="close" id="pClose">✕</button>
+    <div id="gate">
+      <h2>👪 家长入口</h2>
+      <p>请回答：<b id="gateQ"></b></p>
+      <input id="gateA" inputmode="numeric" autocomplete="off">
+      <button class="tab on" id="gateOk">进入</button>
+    </div>
+    <div id="pBody" hidden>
+      <h2>📊 今天</h2>
+      <div class="cards" id="pToday"></div>
+      <div id="pWords"></div>
+      <h3>最近 7 天拼对的单词</h3>
+      <div class="bars" id="pBars"></div>
+      <h3>⏱ 每天能玩多久</h3>
+      <div id="pLimit"></div>
+      <p class="muted">到时间后会出现休息页，键盘不再响应。时间按页面打开且在前台的时长算，记在这台设备的浏览器里。</p>
+      <h3>🎤 这次打开后的跟读录音</h3>
+      <div id="pRecs"><p class="muted">还没有录音。录音只保存在这台电脑的内存里，关掉网页就没了。</p></div>
+    </div>
+  </div>
+</div>
 
 <div id="kb"></div>
 
@@ -168,35 +239,47 @@ function pickVoice(){
   voice = vs.find(v=>/Samantha|Zira|Jenny|Aria|Google US English|Female/i.test(v.name)) || vs[0] || null;
 }
 if ("speechSynthesis" in window){ pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
-function speak(text, rate=0.8, zh=""){
-  if (muted || !("speechSynthesis" in window)) return;
+function speak(text, rate=0.8, zh="", done){
+  done = done || (()=>{});
+  if (muted || !("speechSynthesis" in window)) return done();
   speechSynthesis.cancel();
-  if (zh){ const z = new SpeechSynthesisUtterance(zh); z.lang="zh-CN"; z.rate=0.95; speechSynthesis.speak(z); }
-  if (!text) return;
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang="en-US"; u.rate=rate; u.pitch=1.15; if (voice) u.voice=voice;
-  speechSynthesis.speak(u);
+  let last=null;
+  if (zh){ last = new SpeechSynthesisUtterance(zh); last.lang="zh-CN"; last.rate=0.95; speechSynthesis.speak(last); }
+  if (text){
+    last = new SpeechSynthesisUtterance(text);
+    last.lang="en-US"; last.rate=rate; last.pitch=1.15; if (voice) last.voice=voice;
+    speechSynthesis.speak(last);
+  }
+  if (!last) return done();
+  last.onend = done; last.onerror = done;
+  setTimeout(done, 9000); // 有的浏览器不触发 onend，兜底
 }
 // 中文提示句（和 tools/gen-audio.js 里一致），mp3 缺失时给浏览器中文语音读
 const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一找，这个字母在哪里？", zh_try:"不对哦，看看亮起来的那个键！", zh_great:"太棒啦！",
-  zh_spell:"跟着屏幕，把这个单词一个一个敲出来！", zh_ye:"耶！" };
+  zh_spell:"跟着屏幕，把这个单词一个一个敲出来！", zh_ye:"耶！",
+  zh_follow:"听一听，跟我读！", zh_yourturn:"该你读啦！", zh_hear:"听听你读的。",
+  zh_1min:"还可以玩一分钟哦！", zh_rest:"今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！" };
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
+// 返回一个 Promise：整串播完（或被新的一句打断）时结束，跟读要等示范读完再录
 function say(clips, text, rate){
-  if (muted) return;
-  const token=++playToken;
-  if (playing){ playing.pause(); playing=null; }
-  if ("speechSynthesis" in window) speechSynthesis.cancel();
-  let i=0, fell=false;
-  const zh = clips.filter(c=>ZH[c]).map(c=>ZH[c]).join("");
-  const fallback=()=>{ if (fell || token!==playToken) return; fell=true; speak(text, rate, zh); };
-  const next=()=>{
-    if (token!==playToken || i>=clips.length) return;
-    const a=new Audio(`audio/${clips[i++]}.mp3`);
-    playing=a; a.onended=next; a.onerror=fallback;
-    a.play().catch(fallback);
-  };
-  next();
+  return new Promise(resolve=>{
+    let finished=false; const fin=()=>{ if(!finished){ finished=true; resolve(); } };
+    if (muted) return fin();
+    const token=++playToken;
+    if (playing){ playing.pause(); playing=null; }
+    if ("speechSynthesis" in window) speechSynthesis.cancel();
+    let i=0, fell=false;
+    const zh = clips.filter(c=>ZH[c]).map(c=>ZH[c]).join("");
+    const fallback=()=>{ if (fell || token!==playToken) return fin(); fell=true; speak(text, rate, zh, fin); };
+    const next=()=>{
+      if (token!==playToken || i>=clips.length) return fin();
+      const a=new Audio(`audio/${clips[i++]}.mp3`);
+      playing=a; a.onended=next; a.onerror=fallback;
+      a.play().catch(fallback);
+    };
+    next();
+  });
 }
 let actx=null;
 function beep(freq=660, dur=.12, type="sine"){
@@ -263,6 +346,7 @@ function hint(L){ const k=document.querySelector(`.k[data-k="${L}"]`); if(k) k.c
 function freePress(L){
   picEl.style.fontSize="";
   const word = showLetter(L);
+  updateMic();
   say([`p_${L}${idx[L]}`], `${SAY[L]}. ${SAY[L]} is for ${word}.`);
 }
 
@@ -277,7 +361,7 @@ function newTarget(){
   picEl.textContent = "❓";
   wordEl.textContent=""; cnEl.textContent="";
   promptEl.textContent = "🔊 在键盘上找到这个字母！";
-  restart(letterEl,"pop");
+  restart(letterEl,"pop"); updateMic();
   say(["zh_find", `f_${t}`], `Can you find ${SAY[t]}?`);
   // 4 岁小朋友找不到很正常：8 秒后屏幕键盘自动亮起提示
   hintTimer = setTimeout(()=>hint(t), 8000);
@@ -291,11 +375,12 @@ function findPress(L){
     cur = {L, word, w:`w_${L}0`};
     restart(picEl,"pop");
     promptEl.textContent = "太棒啦！🎉";
+    today().finds++; saveStats();
     stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
     chime(); confetti();
     const g = Math.floor(Math.random()*PRAISE.length);
     say(["zh_great", `g_${g}`, `p_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
-    setTimeout(()=>{ busy=false; newTarget(); }, 3200);
+    setTimeout(()=>{ busy=false; if (mode==="find" && !resting) newTarget(); }, 3200);
   } else {
     // 按错不扣分，只是轻轻摇一下，然后马上亮提示
     restart(letterEl,"shake"); beep(300,.15,"sine");
@@ -319,7 +404,7 @@ function newSpell(){
   letterEl.textContent=""; picEl.textContent=emoji; wordEl.textContent=""; cnEl.textContent=cn;
   promptEl.textContent="🔊 把这个单词敲出来！";
   restart(picEl,"pop");
-  drawTiles();
+  drawTiles(); updateMic();
   say(["zh_spell", spell.clip], word);
 }
 function drawTiles(){
@@ -346,17 +431,20 @@ function spellPress(L){
   spell.pos++; drawTiles(); beep(520+spell.pos*60,.1,"triangle");
   if (spell.pos < spell.word.length){ say([`l_${L}`], SAY[L], .9); return; }
   // 全部敲完：耶！+ 彩带 + 读整个单词
-  busy=true;
+  busy=true; updateMic();
+  today().words.push(cur.word); saveStats();   // 统计：今天拼对的单词
   stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
   promptEl.textContent="耶！🎉"; chime(); confetti(26);
   say(["zh_ye", spell.clip, spell.clip], `Yay! ${cur.word}!`);
-  setTimeout(()=>{ busy=false; if (mode==="spell") newSpell(); }, 4200);
+  setTimeout(()=>{ busy=false; if (mode==="spell" && !resting) newSpell(); }, 4200);
 }
 
 function press(L){
+  if (resting || recBusy || !started) return;   // 休息时间、正在录音时不响应
   flashKey(L);
-  if (/^[0-9]$/.test(L)){ if (mode==="free") showNumber(+L); return; }
+  if (/^[0-9]$/.test(L)){ if (mode==="free"){ showNumber(+L); updateMic(); } return; }
   if (!DATA[L]) return;
+  today().letters++;
   if (mode==="free") freePress(L); else if (mode==="find") findPress(L); else spellPress(L);
 }
 
@@ -379,12 +467,147 @@ function refreshKeys(){ document.querySelectorAll(".k").forEach(k=>k.textContent
 document.addEventListener("keydown", e=>{
   if (e.ctrlKey || e.metaKey || e.altKey) return;   // 留给家长的快捷键
   if (e.key==="F11" || e.key==="Escape" || e.key==="Tab") return;
-  e.preventDefault();                               // 防止小朋友乱按触发浏览器功能
+  if (!$("parent").hidden) return;                  // 家长面板开着：让家长正常打字
+  e.preventDefault();                             // 防止小朋友乱按触发浏览器功能
   if (e.repeat) return;                             // 按住不放不重复刷屏
   const k = e.key.length===1 ? e.key.toUpperCase() : "";
   if (k && (DATA[k] || /[0-9]/.test(k))) press(k);
   else { beep(400+Math.random()*400,.1,"triangle"); restart(letterEl,"shake"); } // 空格、回车等：给个小音效
 });
+
+// ---------- 每日统计 + 限时（存在这台设备的浏览器里） ----------
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} },
+};
+const dayKey = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+let stats = store.get("abc_stats", {});           // { "2026-11-16": { sec, letters, words:[], finds, reads, extra } }
+function today(){
+  const k = dayKey();
+  if (!stats[k]) stats[k] = { sec:0, letters:0, words:[], finds:0, reads:0, extra:0 };
+  return stats[k];
+}
+function saveStats(){
+  // 只留最近 60 天
+  const keys = Object.keys(stats).sort(); while (keys.length > 60) delete stats[keys.shift()];
+  store.set("abc_stats", stats);
+}
+let limitMin = store.get("abc_limit", 15);        // 每天能玩几分钟，家长可改
+let started = false, resting = false, warned1 = false;
+const timeLeftEl = $("timeLeft");
+const allowSec = () => (limitMin + today().extra) * 60;
+function tick(){
+  if (!started || resting || document.hidden || !$("parent").hidden) return;
+  const t = today(); t.sec++;
+  if (t.sec % 10 === 0) saveStats();
+  showLeft();
+  const left = allowSec() - t.sec;
+  if (left === 60 && !warned1){ warned1 = true; say(["zh_1min"], ""); }
+  if (left <= 0) goRest();
+}
+function showLeft(){
+  const left = Math.max(0, allowSec() - today().sec);
+  const m = Math.ceil(left/60);
+  timeLeftEl.textContent = `⏱ 还剩 ${m} 分钟`;
+  timeLeftEl.classList.toggle("low", left <= 120);
+}
+function goRest(){
+  if (resting) return;
+  resting = true; saveStats(); clearHint(); stopRec();
+  const t = today();
+  $("restStats").textContent = `今天拼对 ${t.words.length} 个单词，按了 ${t.letters} 个字母，跟读 ${t.reads} 次 ⭐`;
+  $("rest").hidden = false;
+  say(["zh_rest"], "");
+}
+function checkRest(){ // 换了一天、或家长加了时间，就解除休息
+  if (allowSec() - today().sec > 0){ resting = false; $("rest").hidden = true; warned1 = false; }
+  else goRest();
+  showLeft();
+}
+setInterval(tick, 1000);
+document.addEventListener("visibilitychange", ()=>{ if (!document.hidden){ checkRest(); } else saveStats(); });
+window.addEventListener("pagehide", saveStats);
+
+// ---------- 跟我读：放示范 → 录 3 秒 → 放她自己的 → 再放示范 ----------
+const micBtn = $("micBtn");
+let micStream = null, recorder = null, recBusy = false;
+const recs = []; // 这次打开后的录音，只在内存里
+function updateMic(){
+  const ok = !resting && !busy && cur.word && cur.w && /^w_/.test(cur.w) && (mode==="free" || mode==="spell");
+  micBtn.hidden = !ok || !(navigator.mediaDevices && window.MediaRecorder);
+}
+function stopRec(){ try { if (recorder && recorder.state==="recording") recorder.stop(); } catch(e){} }
+async function followMe(){
+  if (recBusy || !cur.w) return;
+  recBusy = true; busy = true; micBtn.disabled = true;
+  const clip = cur.w, word = cur.word;
+  try {
+    if (!micStream) micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    await say(["zh_follow", clip], word, .7);
+    await say(["zh_yourturn"], "");
+    // 录 3 秒，按钮变红在跳
+    const chunks = [];
+    recorder = new MediaRecorder(micStream);
+    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const stopped = new Promise(r => recorder.onstop = r);
+    micBtn.classList.add("rec"); micBtn.textContent = "🔴 正在听你读…";
+    recorder.start(); setTimeout(stopRec, 3000);
+    await stopped;
+    micBtn.classList.remove("rec"); micBtn.textContent = "🎤 跟我读";
+    const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+    const url = URL.createObjectURL(blob);
+    recs.unshift({ word, url, time: new Date().toTimeString().slice(0,5) }); if (recs.length > 30) URL.revokeObjectURL(recs.pop().url);
+    const t = today(); t.reads++; saveStats();
+    await say(["zh_hear"], "");
+    if (!muted) await new Promise(r => { const a = new Audio(url); a.onended = r; a.onerror = r; a.play().catch(r); });
+    await say([clip], word, .7);          // 再听一遍标准的，自己对比
+    stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+  } catch(e){
+    micBtn.classList.remove("rec"); micBtn.textContent = "🎤 跟我读";
+    promptEl.textContent = "🎤 麦克风打不开：请在浏览器地址栏左边允许使用麦克风";
+  }
+  recBusy = false; busy = false; micBtn.disabled = false; updateMic();
+}
+micBtn.addEventListener("click", e => { e.target.blur(); followMe(); });
+
+// ---------- 家长面板 ----------
+let gateAns = 0;
+function openParent(){
+  const a = 3 + Math.floor(Math.random()*7), b = 3 + Math.floor(Math.random()*7);
+  gateAns = a*b; $("gateQ").textContent = `${a} × ${b} = ?`;
+  $("gateA").value = ""; $("gate").hidden = false; $("pBody").hidden = true; $("parent").hidden = false;
+  setTimeout(()=>$("gateA").focus(), 50);
+}
+function renderParent(){
+  const t = today();
+  const card = (n, s) => `<div class="card"><b>${n}</b><span>${s}</span></div>`;
+  $("pToday").innerHTML =
+    card(t.words.length, "拼对的单词") + card(t.letters, "按的字母") + card(t.finds, "找对的字母") +
+    card(t.reads, "跟读次数") + card(Math.floor(t.sec/60), `已玩分钟（共 ${limitMin + t.extra}）`);
+  const uniq = [...new Set(t.words)];
+  $("pWords").textContent = uniq.length ? `今天拼过：${uniq.join("、")}` : "今天还没有拼单词。";
+  // 最近 7 天柱状图
+  const days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return d; });
+  const vals = days.map(d => (stats[dayKey(d)] || {}).words?.length || 0);
+  const max = Math.max(1, ...vals);
+  $("pBars").innerHTML = days.map((d, i) =>
+    `<div class="bar${i===6?" today":""}"><i data-n="${vals[i]}" style="height:${vals[i]/max*100}%"></i>${i===6?"今天":`${d.getMonth()+1}/${d.getDate()}`}</div>`).join("");
+  $("pLimit").innerHTML = `<div class="limits">${[5,10,15,20,30].map(m =>
+      `<button class="tab${m===limitMin?" on":""}" data-lim="${m}">${m} 分钟</button>`).join("")}
+      <button class="tab" id="plus5">今天再加 5 分钟</button></div>`;
+  $("pLimit").querySelectorAll("[data-lim]").forEach(b => b.onclick = () => { limitMin = +b.dataset.lim; store.set("abc_limit", limitMin); renderParent(); });
+  $("plus5").onclick = () => { today().extra += 5; saveStats(); renderParent(); };
+  $("pRecs").innerHTML = recs.length
+    ? recs.map(r => `<div class="recRow">${r.time} <b>${r.word}</b> <audio controls src="${r.url}"></audio></div>`).join("")
+    : `<p class="muted">还没有录音。录音只保存在这台电脑的内存里，关掉网页就没了。</p>`;
+}
+$("parentBtn").addEventListener("click", e => { e.target.blur(); openParent(); });
+$("gateOk").addEventListener("click", () => {
+  if (+$("gateA").value === gateAns){ $("gate").hidden = true; $("pBody").hidden = false; renderParent(); }
+  else { $("gateA").value = ""; $("gateA").placeholder = "不对哦"; }
+});
+$("gateA").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") $("gateOk").click(); });
+$("pClose").addEventListener("click", () => { $("parent").hidden = true; checkRest(); });
 
 // ---------- 点一下重读：大字母读字母，图片/单词读单词 ----------
 // 找字母时没找到之前点大字母或提示语 = 再听一遍题目
@@ -404,9 +627,11 @@ picEl.addEventListener("click", sayWord);
 wordEl.addEventListener("click", sayWord);
 
 // ---------- 家长按钮 ----------
-document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("on")); t.classList.add("on");
-  mode=t.dataset.mode; clearHint(); busy=false; t.blur();
+document.querySelectorAll("header .tab").forEach(t=>t.addEventListener("click",()=>{
+  t.blur();
+  if (recBusy || resting) return;
+  document.querySelectorAll("header .tab").forEach(x=>x.classList.remove("on")); t.classList.add("on");
+  mode=t.dataset.mode; clearHint(); busy=false;
   tilesEl.innerHTML=""; spell=null; target=null;
   if (mode==="find"){ newTarget(); }
   else if (mode==="spell"){ newSpell(); }
@@ -427,6 +652,8 @@ $("fsBtn").addEventListener("click",e=>{
 $("start").addEventListener("click",()=>{
   $("start").remove();
   document.documentElement.requestFullscreen?.().catch(()=>{});
+  started = true; checkRest();
+  if (resting) return;   // 今天的时间已经用完，直接是休息页
   freePress("A");
   setTimeout(()=>{ if (mode==="free") say(["zh_free"], ""); }, 2600); // 开场后用中文告诉她怎么玩
 });
