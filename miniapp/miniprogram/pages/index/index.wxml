@@ -7,11 +7,23 @@
 
 <!-- 时间到了：休息页 -->
 <view wx:if="{{resting}}" class="rest" bindtap="tapRest">
-  <view class="big">😴</view>
   <view class="h">🔊 今天的时间用完啦</view>
   <view class="p">让小眼睛休息一下，明天再来玩吧！</view>
-  <view class="p">{{restText}}</view>
-  <view class="parentLink" catchtap="goParent">👪 家长</view>
+  <!-- 总结卡片：奖牌 + 今天的成绩 + 新徽章 + 奖牌柜（全部配音，点一下再听） -->
+  <view class="sumCard">
+    <view class="medal">{{card.medal}}</view>
+    <view class="medalName">{{card.medalName}}</view>
+    <view class="sumRow">
+      <text>✏️ 拼对 {{card.words}} 个单词</text><text>🎤 跟读 {{card.reads}} 次</text><text>🔤 按了 {{card.letters}} 个字母</text>
+      <text wx:if="{{card.best}}">最好一次 {{card.best}}</text>
+    </view>
+    <view class="pics">{{card.pics}}</view>
+    <view class="newBadges">
+      <view wx:for="{{card.badges}}" wx:key="n" class="nb"><view class="be">{{item.e}}</view>{{item.n}}</view>
+    </view>
+    <view class="shelf">我的奖牌柜：{{card.shelf}}</view>
+  </view>
+  <view class="parentLink" catchtap="goParent">👪 家长（看成长档案、加时间）</view>
 </view>
 
 <view class="top">
@@ -21,7 +33,7 @@
 </view>
 <view class="bar">
   <text class="left {{low?'low':''}}">{{timeLeft}}</text>
-  <text class="stars">⭐ {{stars}}</text>
+  <text class="stars">{{stars ? "⭐ × " + stars : ""}}</text>
   <view class="tool" bindtap="toggleCase">{{upper?'Aa':'aA'}}</view>
   <view class="tool" bindtap="toggleMute">{{muted?'🔇':'🔊'}}</view>
   <view class="tool" bindtap="goParent">👪</view>

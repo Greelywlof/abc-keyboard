@@ -14,7 +14,7 @@ Page({
     started: false, mode: 'free', upper: true, muted: false,
     letter: '', letterColor: '#7c6cf0', pic: '', parts: empty, cn: '', prompt: '', tiles: [],
     keys: G.keyRows(true, ''), down: '', stars: 0, pop: 0, shake: -1, // -1：页面一打开不摇
-    mic: 'hide', result: null, timeLeft: '', low: false, resting: false, restText: '', noAudio: !AUDIO_BASE,
+    mic: 'hide', result: null, timeLeft: '', low: false, resting: false, card: {}, noAudio: !AUDIO_BASE,
   },
 
   onShow() {
@@ -61,7 +61,8 @@ Page({
     if (!this.data.started || this.data.resting || recBusy) return;
     this.setData({ down: k }); setTimeout(() => this.setData({ down: '' }), 150);
     if (/^[0-9]$/.test(k)) { if (this.data.mode === 'free') this.showNumber(+k); return; }
-    stats.today().letters++;
+    const td = stats.today(); td.letters++;
+    if (!(td.seen || '').includes(k)) td.seen = (td.seen || '') + k; // 今天按过的字母（徽章「26 个字母全按过」）
     if (this.data.mode === 'free') this.freePress(k);
     else if (this.data.mode === 'find') this.findPress(k);
     else this.spellPress(k);
@@ -268,12 +269,26 @@ Page({
   goRest() {
     if (this.data.resting) return;
     stats.save(); clearTimeout(hintTimer);
-    const t = stats.today();
-    this.setData({ resting: true, restText: `今天拼对 ${t.words.length} 个单词，按了 ${t.letters} 个字母，跟读 ${t.reads} 次 ⭐` });
-    sound.play(G.restClips(t.words.length));
+    // 总结卡片：今天的奖牌、成绩、拼对的单词（用图画）、今天新得的徽章、奖牌柜
+    const k = stats.dayKey();
+    const r = stats.updateArchive(), a = r.archive, s = r.summary;
+    const M = stats.Medals, m = r.medal || M.DAILY[2];
+    const todays = M.BADGES.filter(b => a.badges[b.id] === k);
+    const tot = M.totals(a);
+    const emoji = {}; Object.values(G.DATA).forEach(list => list.forEach(([w, e]) => { emoji[w] = e; }));
+    this._restVoice = G.restClips(s.words).concat([m.clip], todays.length ? ['zh_newbadge'] : []);
+    this.setData({
+      resting: true,
+      card: {
+        medal: m.emoji, medalName: `今天的${m.name}`, words: s.words, reads: s.reads, letters: s.letters, best: '⭐'.repeat(s.best),
+        pics: s.uniq.map(w => emoji[w] || '').join(' '), badges: todays.map(b => ({ e: b.emoji, n: b.name })),
+        shelf: `🥇 ${tot.medals.gold}　🥈 ${tot.medals.silver}　🥉 ${tot.medals.bronze}　🏅 徽章 ${Object.keys(a.badges).length}`,
+      },
+    });
+    sound.play(this._restVoice);
   },
   // 孩子不认字：点休息页任何地方再读一遍
-  tapRest() { sound.play(G.restClips(stats.today().words.length)); },
+  tapRest() { sound.play(this._restVoice || ['zh_rest']); },
   checkRest() {
     if (stats.leftSec() > 0) { if (this.data.resting) { warned1 = false; this.setData({ resting: false }); } }
     else this.goRest();

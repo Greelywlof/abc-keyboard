@@ -17,6 +17,15 @@
 .bar.today .col { background: #ff7aa8; }
 .ev { display: flex; gap: 16rpx; align-items: center; font-size: 28rpx; padding: 10rpx 0; border-bottom: 2rpx solid #f1eef8; flex-wrap: wrap; }
 .ev .t { color: #8a83a3; } .ev .w { font-weight: bold; } .ev .sc { color: #7c6cf0; } .ev .weak { color: #e03131; font-size: 24rpx; }
+.wall { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12rpx; }
+.bd { background: #f6f3ff; border-radius: 20rpx; padding: 12rpx 6rpx; text-align: center; font-size: 22rpx; color: #8a83a3; }
+.bd .be { font-size: 56rpx; }
+.bd.off .be { filter: grayscale(1); opacity: .25; }
+.cal { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8rpx; }
+.cd { height: 60rpx; border-radius: 12rpx; background: #f1eef8; display: flex; align-items: center; justify-content: center; font-size: 32rpx; position: relative; }
+.cd .dn { position: absolute; right: 4rpx; bottom: 0; font-size: 16rpx; color: #8a83a3; }
+.learned { display: flex; flex-wrap: wrap; gap: 10rpx; }
+.lw { background: #f6f3ff; border-radius: 16rpx; padding: 6rpx 14rpx; font-size: 26rpx; }
 .limits { display: flex; flex-wrap: wrap; gap: 12rpx; }
 .lim { padding: 12rpx 24rpx; border-radius: 999rpx; background: #f6f3ff; font-size: 26rpx; }
 .lim.on { background: #7c6cf0; color: #fff; }

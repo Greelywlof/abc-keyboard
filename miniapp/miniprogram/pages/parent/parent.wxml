@@ -22,6 +22,25 @@
       </view>
     </view>
 
+    <view class="h" style="margin-top:48rpx">📜 成长档案</view>
+    <view class="cards">
+      <view wx:for="{{aCards}}" wx:key="s" class="card"><view class="n">{{item.n}}</view><view class="s">{{item.s}}</view></view>
+    </view>
+    <view class="h2">🏅 徽章墙</view>
+    <view class="wall">
+      <view wx:for="{{badges}}" wx:key="n" class="bd {{item.d?'':'off'}}"><view class="be">{{item.e}}</view>{{item.n}}<view wx:if="{{item.d}}">{{item.d}}</view></view>
+    </view>
+    <view class="h2">📅 最近 30 天（每天的奖牌）</view>
+    <view class="cal">
+      <view wx:for="{{cal}}" wx:key="index" class="cd">{{item.m}}<text class="dn">{{item.day}}</text></view>
+    </view>
+    <view class="h2">📚 学会的单词</view>
+    <view class="learned">
+      <text wx:for="{{learned}}" wx:key="w" class="lw">{{item.e}} {{item.w}}{{item.n>1?' ×'+item.n+'天':''}}</text>
+      <text wx:if="{{!learned.length}}" class="muted">还没有拼对过单词</text>
+    </view>
+    <view class="muted">每天一枚奖牌：来玩就有 🥉；拼对 3 个单词或跟读 5 次 🥈；拼对 6 个并跟读 6 次 🥇。档案存在这台手机上，长期保留。</view>
+
     <view class="h2">🎤 今天的跟读评测</view>
     <view wx:if="{{!evals.length}}" class="muted">还没有评测。录音评完就删，这里只记分数。</view>
     <view wx:for="{{evals}}" wx:key="index" class="ev">

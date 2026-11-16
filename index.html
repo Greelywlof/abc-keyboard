@@ -89,8 +89,31 @@
   #rest .big{font-size:min(24vh,40vw)}
   #rest h2{font-size:min(6vh,9vw);margin:0}
   #rest p{font-size:min(3.6vh,5vw);color:var(--soft);margin:0}
-  .restStats{font-size:min(3.4vh,5vw);margin-top:12px}
-  #parent{background:rgba(40,30,70,.45)}
+  #rest{overflow:auto}
+  .sumCard{background:#fff;border-radius:28px;padding:18px 22px;margin-top:12px;width:min(560px,100%);box-shadow:0 10px 30px rgba(80,60,160,.15);display:flex;flex-direction:column;align-items:center;gap:8px}
+  .medal{font-size:min(16vh,26vw);line-height:1;animation:medalIn 1.2s cubic-bezier(.2,1.6,.4,1)}
+  @keyframes medalIn{0%{transform:scale(.2) rotate(-200deg);opacity:0}100%{transform:none;opacity:1}}
+  .medalName{font-size:min(4vh,6vw);font-weight:bold;color:#c77d00}
+  .sumRow{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .sumRow span{background:#f6f3ff;border-radius:14px;padding:6px 12px;font-size:min(3.2vh,4.6vw)}
+  .sumRow b{font-size:1.3em;color:#7c6cf0}
+  .sumWords{font-size:min(5vh,8vw);letter-spacing:4px;text-align:center}
+  .newBadges{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .newBadges div{background:linear-gradient(135deg,#fff3c4,#ffd84d);border-radius:16px;padding:6px 12px;font-size:min(2.8vh,4vw);animation:pop .6s .8s both}
+  .newBadges div b{font-size:1.6em;display:block;text-align:center}
+  .shelf{font-size:min(3vh,4.4vw);color:var(--soft)}
+  /* 家长面板：成长档案 */
+  .badgeWall{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+  .badgeWall div{text-align:center;font-size:12px;color:var(--soft);background:#f6f3ff;border-radius:12px;padding:8px 4px}
+  .badgeWall div b{display:block;font-size:30px}
+  .badgeWall div.off b{filter:grayscale(1);opacity:.25}
+  .cal{display:grid;grid-template-columns:repeat(10,1fr);gap:4px}
+  .cal div{aspect-ratio:1;border-radius:8px;background:#f1eef8;display:flex;align-items:center;justify-content:center;font-size:18px;position:relative}
+  .cal div small{position:absolute;bottom:1px;right:3px;font-size:9px;color:var(--soft)}
+  .learned{display:flex;flex-wrap:wrap;gap:6px;font-size:14px}
+  .learned span{background:#f6f3ff;border-radius:10px;padding:3px 8px}
+  #parent{background:rgba(40,30,70,.45);z-index:30}   /* 休息页上也能打开 */
+  .restParent{margin-top:10px;border:none;background:none;color:var(--soft);font-size:15px;cursor:pointer;font-family:inherit}
   .panel{background:#fff;border-radius:20px;padding:20px 22px;width:min(640px,100%);max-height:92vh;overflow:auto;position:relative;user-select:text}
   .panel h2{margin:0 0 10px} .panel h3{margin:18px 0 8px;font-size:17px}
   .panel .close{position:absolute;top:10px;right:12px;border:none;background:none;font-size:22px;cursor:pointer;color:var(--soft)}
@@ -157,10 +180,18 @@
 
 <!-- 时间到了：休息页 -->
 <div id="rest" hidden>
-  <div class="big">😴</div>
   <h2>🔊 今天的时间用完啦</h2>
   <p>让小眼睛休息一下，明天再来玩吧！</p>
-  <div class="restStats" id="restStats"></div>
+  <!-- 今天的总结卡片：颁一枚奖牌 + 今天的成绩 + 新徽章 + 我的奖牌柜（全部配音，点卡片再听一遍） -->
+  <div class="sumCard">
+    <div class="medal" id="rMedal">🥉</div>
+    <div class="medalName" id="rMedalName"></div>
+    <div class="sumRow" id="rStats"></div>
+    <div class="sumWords" id="rWords"></div>
+    <div class="newBadges" id="rBadges"></div>
+    <div class="shelf" id="rShelf"></div>
+  </div>
+  <button class="restParent" id="restParent">👪 家长（看成长档案、加时间）</button>
 </div>
 
 <!-- 家长面板：先答一道乘法题才能进（4 岁孩子打不开） -->
@@ -179,6 +210,15 @@
       <div id="pWords"></div>
       <h3>最近 7 天拼对的单词</h3>
       <div class="bars" id="pBars"></div>
+      <h2 style="margin-top:22px">📜 成长档案</h2>
+      <div class="cards" id="aTotals"></div>
+      <h3>🏅 徽章墙</h3>
+      <div class="badgeWall" id="aBadges"></div>
+      <h3>📅 最近 30 天（每天的奖牌）</h3>
+      <div class="cal" id="aCal"></div>
+      <h3>📚 学会的单词（拼对过的）</h3>
+      <div class="learned" id="aWords"></div>
+      <p class="muted">每天一枚奖牌：来玩就有 🥉；拼对 3 个单词或跟读 5 次 🥈；拼对 6 个并跟读 6 次 🥇。档案存在这台设备的浏览器里，长期保留。</p>
       <h3>⏱ 每天能玩多久</h3>
       <div id="pLimit"></div>
       <p class="muted">到时间后会出现休息页，键盘不再响应。时间按页面打开且在前台的时长算，记在这台设备的浏览器里。</p>
@@ -190,6 +230,7 @@
 
 <div id="kb"></div>
 
+<script src="medals.js"></script>
 <script>
 // ---------- 字母数据：每个字母两个简单单词，按一次换一个 ----------
 // 改单词时同步改 tools/words.json，再跑 node tools/gen-audio.js 重新生成发音
@@ -231,6 +272,8 @@ const PRAISE = ["Great job!","Well done!","Yay!","Super!","You did it!","Awesome
 
 const $ = id => document.getElementById(id);
 const letterEl=$("letter"), picEl=$("pic"), wordEl=$("word"), cnEl=$("cn"), promptEl=$("prompt"), starsEl=$("stars");
+// 右上角星星：只显示「⭐ × 数量」，不一颗颗往上堆（11-16 用户要求）
+const showStars = () => { starsEl.textContent = stars ? `⭐ × ${stars}` : ""; };
 
 let mode="free", upper=true, muted=false, idx={}, target=null, hintTimer=null, stars=0, busy=false;
 let cur = {L:null, word:null, num:null};   // 当前屏幕上的字母/单词，点一下可以重读
@@ -266,6 +309,8 @@ const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一�
   zh_follow:"听一听，跟我读！", zh_yourturn:"该你读啦！", zh_hear:"听听你读的。",
   zh_1min:"还可以玩一分钟哦！", zh_rest:"今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！",
   zh_today:"今天你拼对了", zh_words_end:"个单词，真棒！", zh_many:"好多好多",
+  zh_medal_gold:"你得到了一枚金牌！太厉害了！", zh_medal_silver:"你得到了一枚银牌！真棒！", zh_medal_bronze:"你得到了一枚铜牌！明天继续加油！",
+  zh_newbadge:"还得到了一个新徽章！", zh_goodtry:"读得好！", zh_readagain:"再读一次给我听！",
   zh_score3:"哇，读得真标准！", zh_score2:"很不错！有一个音再读清楚一点就更好啦。", zh_score1:"我们再听一遍，慢慢跟着读。",
   zh_noheard:"没听清楚，大声一点再读一次好吗？", zh_listenpart:"听，这个地方要这样读：" };
 const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "")   // 数字直接给浏览器读
@@ -390,7 +435,7 @@ function findPress(L){
     restart(picEl,"pop");
     promptEl.textContent = "太棒啦！🎉";
     today().finds++; saveStats();
-    stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+    stars++; showStars();
     chime(); confetti();
     const g = Math.floor(Math.random()*PRAISE.length);
     say(["zh_great", `g_${g}`, `p_${L}0`, `c_${L}0`], `${PRAISE[g]} ${SAY[L]} is for ${word}.`);
@@ -496,7 +541,7 @@ function spellPress(L){
   // 全部敲完：耶！+ 彩带 + 读整个单词
   busy=true; updateMic();
   today().words.push(cur.word); saveStats();   // 统计：今天拼对的单词
-  stars++; starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+  stars++; showStars();
   promptEl.textContent="耶！🎉"; chime(); confetti(26);
   spellOutro(spellTok);   // 耶 → 再读一次给我听 → 打分 → 下一个词
 }
@@ -506,7 +551,8 @@ function press(L){
   flashKey(L);
   if (/^[0-9]$/.test(L)){ if (mode==="free"){ showNumber(+L); updateMic(); } return; }
   if (!DATA[L]) return;
-  today().letters++;
+  const t = today(); t.letters++;
+  if (!(t.seen || "").includes(L)) t.seen = (t.seen || "") + L;   // 记今天按过哪些字母（徽章「26 个字母全按过」）
   if (mode==="free") freePress(L); else if (mode==="find") findPress(L); else spellPress(L);
 }
 
@@ -549,10 +595,14 @@ function today(){
   if (!stats[k]) stats[k] = { sec:0, letters:0, words:[], finds:0, reads:0, extra:0 };
   return stats[k];
 }
+// 成长档案：每天一条小结 + 学会的单词 + 徽章，长期保存（明细统计只留 60 天）
+let archive = store.get("abc_archive", null) || Medals.blank();
 function saveStats(){
   // 只留最近 60 天
   const keys = Object.keys(stats).sort(); while (keys.length > 60) delete stats[keys.shift()];
   store.set("abc_stats", stats);
+  archive = Medals.update(archive, dayKey(), today()).archive;   // 顺便更新今天的档案（徽章当天就记下，休息时一起颁）
+  store.set("abc_archive", archive);
 }
 let limitMin = store.get("abc_limit", 15);        // 每天能玩几分钟，家长可改
 let started = false, resting = false, warned1 = false;
@@ -573,17 +623,36 @@ function showLeft(){
   timeLeftEl.textContent = `⏱ 还剩 ${m} 分钟`;
   timeLeftEl.classList.toggle("low", left <= 120);
 }
+const EMOJI = {}; Object.values(DATA).forEach(list => list.forEach(([w, e]) => { EMOJI[w] = e; }));
+let restVoice = ["zh_rest"];
 function goRest(){
   if (resting) return;
   resting = true; saveStats(); clearHint(); stopRec();
-  const t = today();
-  $("restStats").textContent = `今天拼对 ${t.words.length} 个单词，按了 ${t.letters} 个字母，跟读 ${t.reads} 次 ⭐`;
+  renderRestCard();
   $("rest").hidden = false;
-  say(restClips(t.words.length), "");
+  say(restVoice, "");
+}
+// 总结卡片：今天的奖牌、成绩、拼对的单词（用图画，不认字也看得懂）、今天新得的徽章、奖牌柜
+function renderRestCard(){
+  const k = dayKey();
+  const r = Medals.update(archive, k, today());
+  archive = r.archive; store.set("abc_archive", archive);
+  const s = r.summary, m = r.medal || Medals.DAILY[2];
+  $("rMedal").textContent = m.emoji;
+  $("rMedalName").textContent = `今天的${m.name}`;
+  $("rStats").innerHTML = `<span>✏️ 拼对 <b>${s.words}</b> 个单词</span><span>🎤 跟读 <b>${s.reads}</b> 次</span><span>🔤 按了 <b>${s.letters}</b> 个字母</span>` +
+    (s.best ? `<span>最好一次 ${"⭐".repeat(s.best)}</span>` : "");
+  $("rWords").textContent = s.uniq.map(w => EMOJI[w] || "").join(" ");
+  const todays = Medals.BADGES.filter(b => archive.badges[b.id] === k);
+  $("rBadges").innerHTML = todays.map(b => `<div><b>${b.emoji}</b>${b.name}</div>`).join("");
+  const t = Medals.totals(archive);
+  $("rShelf").textContent = `我的奖牌柜：🥇 ${t.medals.gold}　🥈 ${t.medals.silver}　🥉 ${t.medals.bronze}　🏅 徽章 ${Object.keys(archive.badges).length}`;
+  // 配音：时间到了 + 今天拼对几个单词 + 颁奖 + 新徽章
+  restVoice = restClips(s.words).concat([m.clip], todays.length ? ["zh_newbadge"] : []);
 }
 // 休息页读的话：「时间用完啦…」+「今天你拼对了 N 个单词，真棒！」；孩子不认字，点休息页任何地方再读一遍
 function restClips(n){ return n ? ["zh_rest", "zh_today", n <= 50 ? `zh_n_${n}` : "zh_many", "zh_words_end"] : ["zh_rest"]; }
-$("rest").addEventListener("click", ()=> say(restClips(today().words.length), ""));
+$("rest").addEventListener("click", ()=> say(restVoice, ""));
 function checkRest(){ // 换了一天、或家长加了时间，就解除休息
   if (allowSec() - today().sec > 0){ resting = false; $("rest").hidden = true; warned1 = false; }
   else goRest();
@@ -720,7 +789,7 @@ async function showScore(r, word, clip){
   const t = today(); (t.evals = t.evals || []).push({ word, total:r.total, level:r.level, weak: r.weak ? (r.weak.letter || r.weak.phone) : "", t: Date.now() }); saveStats();
   const lv = r.level;
   scoreEl.innerHTML = lv === 0 ? "🔇 没听清楚" : `${"⭐".repeat(lv)}${"☆".repeat(3 - lv)} <small>${r.total} 分</small>`;
-  stars += Math.max(1, lv); starsEl.textContent = "⭐".repeat(Math.min(stars,20)) + (stars>20?` ×${stars}`:"");
+  stars += Math.max(1, lv); showStars();
   // 纠音：评测给出了对应字母，就在单词里把它标红
   const l = r.weak && r.weak.letter ? String(r.weak.letter).toLowerCase() : "";
   const i = l ? word.toLowerCase().indexOf(l) : -1;
@@ -759,11 +828,26 @@ function renderParent(){
       <button class="tab" id="plus5">今天再加 5 分钟</button></div>`;
   $("pLimit").querySelectorAll("[data-lim]").forEach(b => b.onclick = () => { limitMin = +b.dataset.lim; store.set("abc_limit", limitMin); renderParent(); });
   $("plus5").onclick = () => { today().extra += 5; saveStats(); renderParent(); };
+  // 成长档案
+  saveStats();
+  const A = Medals.totals(archive), st = Medals.streakOf(archive.days, dayKey());
+  $("aTotals").innerHTML = card(A.days, "玩过的天数") + card(A.learned + "/52", "学会的单词") + card(A.totalWords, "一共拼对") +
+    card(A.reads, "一共跟读") + card(A.avg || "-", "跟读平均分") + card(`${st} / ${A.streakBest}`, "连续天数 / 最长") +
+    card(`🥇${A.medals.gold} 🥈${A.medals.silver} 🥉${A.medals.bronze}`, "奖牌") + card(A.minutes, "一共玩了几分钟");
+  $("aBadges").innerHTML = Medals.BADGES.map(b => { const d = archive.badges[b.id];
+    return `<div class="${d ? "" : "off"}"><b>${b.emoji}</b>${b.name}${d ? `<br>${d.slice(5)}` : ""}</div>`; }).join("");
+  const cal = [...Array(30)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (29 - i)); return d; });
+  const ME = { gold: "🥇", silver: "🥈", bronze: "🥉" };
+  $("aCal").innerHTML = cal.map(d => { const x = archive.days[dayKey(d)];
+    return `<div title="${dayKey(d)}${x ? `：拼对 ${x.w}、跟读 ${x.r}` : ""}">${x ? ME[x.m] || "·" : ""}<small>${d.getDate()}</small></div>`; }).join("");
+  const learned = Object.entries(archive.learned || {}).sort((a, b) => b[1] - a[1]);
+  $("aWords").innerHTML = learned.length ? learned.map(([w, n]) => `<span>${EMOJI[w] || ""} ${w}${n > 1 ? ` ×${n}天` : ""}</span>`).join("") : `<span class="muted">还没有拼对过单词</span>`;
   $("pRecs").innerHTML = recs.length
     ? recs.map(r => `<div class="recRow">${r.time} <b>${r.word}</b> ${r.score ? `${"⭐".repeat(r.score.level) || "没听清"} ${r.score.total}分${r.score.weak && r.score.weak.letter ? ` <span style="color:#e03131">要练：${r.score.weak.letter}</span>` : ""}` : `<span class="muted">没打分</span>`} <audio controls src="${r.url}"></audio></div>`).join("")
     : `<p class="muted">还没有录音。录音只保存在这台电脑的内存里，关掉网页就没了。</p>`;
 }
 $("parentBtn").addEventListener("click", e => { e.target.blur(); openParent(); });
+$("restParent").addEventListener("click", e => { e.stopPropagation(); openParent(); });   // 不触发休息页的重读
 $("gateOk").addEventListener("click", () => {
   if (+$("gateA").value === gateAns){ $("gate").hidden = true; $("pBody").hidden = false; renderParent(); }
   else { $("gateA").value = ""; $("gateA").placeholder = "不对哦"; }

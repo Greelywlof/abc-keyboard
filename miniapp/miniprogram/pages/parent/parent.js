@@ -30,7 +30,21 @@ Page({
       const d = new Date(e.t);
       return { word: e.word, total: e.total, stars: '⭐'.repeat(e.level) || '没听清', weak: e.weak, time: `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` };
     });
+    // 成长档案
+    stats.save();
+    const M = stats.Medals, a = stats.getArchive(), A = M.totals(a), streak = M.streakOf(a.days, stats.dayKey());
+    const aCards = [
+      [A.days, '玩过的天数'], [`${A.learned}/52`, '学会的单词'], [A.totalWords, '一共拼对'], [A.reads, '一共跟读'],
+      [A.avg || '-', '跟读平均分'], [`${streak} / ${A.streakBest}`, '连续 / 最长天数'],
+      [`🥇${A.medals.gold} 🥈${A.medals.silver} 🥉${A.medals.bronze}`, '奖牌'], [A.minutes, '一共玩了几分钟'],
+    ].map(([n, s]) => ({ n, s }));
+    const badges = M.BADGES.map(b => ({ e: b.emoji, n: b.name, d: a.badges[b.id] ? a.badges[b.id].slice(5) : '' }));
+    const ME = { gold: '🥇', silver: '🥈', bronze: '🥉' };
+    const cal = [...Array(30)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (29 - i)); const x = a.days[stats.dayKey(d)]; return { day: d.getDate(), m: x ? (ME[x.m] || '·') : '' }; });
+    const emoji = {}; Object.values(require('../../utils/words')).forEach(list => list.forEach(([w, e]) => { emoji[w] = e; }));
+    const learned = Object.keys(a.learned || {}).sort((x, y) => a.learned[y] - a.learned[x]).map(w => ({ w, e: emoji[w] || '', n: a.learned[w] }));
     this.setData({
+      aCards, badges, cal, learned,
       cards, words: uniq.length ? `今天拼过：${uniq.join('、')}` : '今天还没有拼单词。', bars,
       limit: stats.limitMin(), extra: t.extra, evals, evalLeft: Math.max(0, EVAL_PER_DAY - t.evals.length),
     });

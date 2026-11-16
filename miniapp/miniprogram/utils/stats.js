@@ -28,4 +28,21 @@ function setLimit(m) { try { wx.setStorageSync(LIMIT_KEY, m); } catch (e) {} }
 const allowSec = () => (limitMin() + today().extra) * 60;
 const leftSec = () => Math.max(0, allowSec() - today().sec);
 
-module.exports = { dayKey, today, day, save, limitMin, setLimit, allowSec, leftSec };
+// 成长档案：每天一条小结 + 学会的单词 + 徽章，长期保存（规则在 utils/medals.js，和网页共用）
+const Medals = require('./medals');
+let archive = null;
+function getArchive() {
+  if (!archive) { try { archive = wx.getStorageSync('abc_archive') || Medals.blank(); } catch (e) { archive = Medals.blank(); } }
+  return archive;
+}
+// 用今天的统计更新档案，返回 { medal, summary, archive }
+function updateArchive() {
+  const r = Medals.update(getArchive(), dayKey(), today());
+  archive = r.archive;
+  try { wx.setStorageSync('abc_archive', archive); } catch (e) {}
+  return r;
+}
+const _save = save;
+function saveAll() { _save(); updateArchive(); }
+
+module.exports = { dayKey, today, day, save: saveAll, limitMin, setLimit, allowSec, leftSec, getArchive, updateArchive, Medals };

@@ -106,6 +106,11 @@ function clips() {
   // 拼单词「读 → 拼 → 读」
   c.zh_goodtry = '读得好！';
   c.zh_readagain = '再读一次给我听！';
+  // 休息时颁奖
+  c.zh_medal_gold = '你得到了一枚金牌！太厉害了！';
+  c.zh_medal_silver = '你得到了一枚银牌！真棒！';
+  c.zh_medal_bronze = '你得到了一枚铜牌！明天继续加油！';
+  c.zh_newbadge = '还得到了一个新徽章！';
   // 休息页把统计也读出来：「今天你拼对了」+ 数字 +「个单词，真棒！」（孩子不认字，屏幕上的字都要能听到）
   c.zh_today = '今天你拼对了';
   c.zh_words_end = '个单词，真棒！';

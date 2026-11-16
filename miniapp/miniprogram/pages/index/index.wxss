@@ -5,13 +5,24 @@ page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24rpx; text-align: center; padding: 32rpx;
 }
 .start { background: rgba(255, 247, 224, .97); }
-.rest { background: linear-gradient(160deg, #dfe7ff, #f3e8ff); }
+.rest { background: linear-gradient(160deg, #dfe7ff, #f3e8ff); overflow-y: auto; justify-content: flex-start; padding-top: 60rpx; }
 .big { font-size: 220rpx; }
 .go { font-size: 52rpx; background: var(--main); color: #fff; padding: 24rpx 72rpx; border-radius: 999rpx; box-shadow: 0 10rpx 0 #5646c4; }
 .warn { color: #e8590c; font-size: 26rpx; }
 .rest .h { font-size: 52rpx; font-weight: bold; }
 .rest .p { font-size: 32rpx; color: var(--soft); }
-.parentLink { margin-top: 40rpx; font-size: 28rpx; color: var(--soft); }
+.parentLink { margin-top: 24rpx; font-size: 28rpx; color: var(--soft); }
+.sumCard { background: #fff; border-radius: 40rpx; padding: 32rpx; width: 90%; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 14rpx; box-shadow: 0 16rpx 48rpx rgba(80,60,160,.15); }
+.medal { font-size: 180rpx; line-height: 1; animation: medalIn 1.2s cubic-bezier(.2,1.6,.4,1); }
+@keyframes medalIn { from { transform: scale(.2) rotate(-200deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.medalName { font-size: 40rpx; font-weight: bold; color: #c77d00; }
+.sumRow { display: flex; flex-wrap: wrap; gap: 12rpx; justify-content: center; }
+.sumRow text { background: #f6f3ff; border-radius: 20rpx; padding: 8rpx 18rpx; font-size: 28rpx; }
+.pics { font-size: 56rpx; letter-spacing: 8rpx; text-align: center; }
+.newBadges { display: flex; flex-wrap: wrap; gap: 12rpx; justify-content: center; }
+.nb { background: linear-gradient(135deg, #fff3c4, #ffd84d); border-radius: 20rpx; padding: 8rpx 18rpx; font-size: 24rpx; text-align: center; }
+.nb .be { font-size: 48rpx; }
+.shelf { font-size: 26rpx; color: var(--soft); }
 
 .top { display: flex; gap: 12rpx; padding: 16rpx 24rpx 0; }
 .tab { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 999rpx; background: #fff; box-shadow: 0 6rpx 0 var(--key-shadow); font-size: 30rpx; }
