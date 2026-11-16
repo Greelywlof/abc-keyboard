@@ -1,0 +1,20 @@
+{
+  "description": "ABC 字母乐园：4 岁儿童认字母、拼单词、跟读评测（简易版）",
+  "projectname": "abc-keyboard",
+  "appid": "touristappid",
+  "miniprogramRoot": "miniprogram/",
+  "cloudfunctionRoot": "cloudfunctions/",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.0",
+  "setting": {
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "urlCheck": true,
+    "minifyWXSS": true,
+    "minifyWXML": true
+  },
+  "condition": {},
+  "editorSetting": { "tabIndent": "insertSpaces", "tabSize": 2 }
+}

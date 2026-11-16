@@ -1,0 +1,7 @@
+page {
+  --ink: #3b3355; --soft: #8a83a3; --key-shadow: #d9d2ea; --hint: #ffd84d; --main: #7c6cf0;
+  background: linear-gradient(160deg, #fff7e0, #e3f4ff);
+  color: var(--ink);
+  font-family: "Arial Rounded MT Bold", "PingFang SC", sans-serif;
+  min-height: 100vh;
+}

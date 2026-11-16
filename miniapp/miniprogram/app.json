@@ -1,0 +1,15 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/parent/parent"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#fff7e0",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "ABC 字母乐园",
+    "backgroundColor": "#fff7e0"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

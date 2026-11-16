@@ -1,0 +1,63 @@
+page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+.start, .rest {
+  position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24rpx; text-align: center; padding: 32rpx;
+}
+.start { background: rgba(255, 247, 224, .97); }
+.rest { background: linear-gradient(160deg, #dfe7ff, #f3e8ff); }
+.big { font-size: 220rpx; }
+.go { font-size: 52rpx; background: var(--main); color: #fff; padding: 24rpx 72rpx; border-radius: 999rpx; box-shadow: 0 10rpx 0 #5646c4; }
+.warn { color: #e8590c; font-size: 26rpx; }
+.rest .h { font-size: 52rpx; font-weight: bold; }
+.rest .p { font-size: 32rpx; color: var(--soft); }
+.parentLink { margin-top: 40rpx; font-size: 28rpx; color: var(--soft); }
+
+.top { display: flex; gap: 12rpx; padding: 16rpx 24rpx 0; }
+.tab { flex: 1; text-align: center; padding: 16rpx 0; border-radius: 999rpx; background: #fff; box-shadow: 0 6rpx 0 var(--key-shadow); font-size: 30rpx; }
+.tab.on { background: var(--main); color: #fff; box-shadow: 0 6rpx 0 #5646c4; }
+.bar { display: flex; align-items: center; gap: 12rpx; padding: 16rpx 24rpx; font-size: 26rpx; }
+.bar .left { color: var(--soft); }
+.bar .left.low { color: #e8590c; font-weight: bold; }
+.bar .stars { margin-right: auto; margin-left: 16rpx; }
+.tool { background: #fff; border-radius: 999rpx; padding: 8rpx 20rpx; box-shadow: 0 4rpx 0 var(--key-shadow); }
+
+.stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 0; padding: 0 24rpx; }
+.prompt { font-size: 32rpx; color: var(--soft); min-height: 44rpx; }
+.row { display: flex; align-items: center; justify-content: center; gap: 40rpx; }
+.letter { font-size: 260rpx; line-height: 1; font-weight: bold; text-shadow: 0 10rpx 0 rgba(0,0,0,.08); }
+.pic { font-size: 180rpx; line-height: 1; }
+.pic.many { font-size: 64rpx; max-width: 520rpx; text-align: center; }
+.tiles { display: flex; gap: 12rpx; margin-top: 16rpx; flex-wrap: wrap; justify-content: center; }
+.tile { width: 96rpx; height: 116rpx; border-radius: 20rpx; background: #fff; box-shadow: 0 6rpx 0 var(--key-shadow);
+  display: flex; align-items: center; justify-content: center; font-size: 68rpx; font-weight: bold; color: #c9c3dc; }
+.tile.done { color: #fff; }
+.tile.now { color: var(--ink); outline: 8rpx solid var(--hint); animation: bob .8s infinite alternate; }
+@keyframes bob { to { transform: translateY(-10rpx); } }
+.word { font-size: 56rpx; letter-spacing: 4rpx; margin-top: 12rpx; min-height: 72rpx; }
+.word .hl { font-size: 1.25em; font-weight: bold; }
+.word .weak { color: #e03131; font-size: 1.35em; font-weight: bold; text-decoration: underline; }
+.cn { font-size: 28rpx; color: var(--soft); min-height: 40rpx; }
+.result { font-size: 56rpx; margin-top: 8rpx; letter-spacing: 8rpx; }
+.mic { margin-top: 16rpx; background: #ff7aa8; color: #fff; padding: 20rpx 56rpx; border-radius: 999rpx; font-size: 36rpx; box-shadow: 0 8rpx 0 #d94f80; }
+.mic.rec { background: #e03131; box-shadow: 0 8rpx 0 #a51d1d; animation: beat .6s infinite alternate; }
+.mic.busy { opacity: .6; }
+@keyframes beat { to { transform: scale(1.08); } }
+
+.kb { padding: 12rpx 8rpx 40rpx; display: flex; flex-direction: column; gap: 14rpx; }
+.krow { display: flex; justify-content: center; gap: 10rpx; }
+.k { width: 64rpx; height: 84rpx; border-radius: 16rpx; background: #fff; box-shadow: 0 8rpx 0 var(--key-shadow);
+  display: flex; align-items: center; justify-content: center; font-size: 40rpx; font-weight: bold; }
+.k.down { transform: translateY(6rpx); box-shadow: 0 2rpx 0 var(--key-shadow); }
+.k.hint { background: var(--hint); animation: glow 1s infinite alternate; }
+@keyframes glow { to { box-shadow: 0 8rpx 0 #e0b400, 0 0 0 12rpx rgba(255,216,77,.45); } }
+
+/* 两套一样的动画轮流用，数字变了就会重新播放 */
+.pop0 { animation: pop0 .45s cubic-bezier(.2,1.6,.4,1); }
+.pop1 { animation: pop1 .45s cubic-bezier(.2,1.6,.4,1); }
+@keyframes pop0 { from { transform: scale(.3) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes pop1 { from { transform: scale(.3) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.shake0 { animation: shk0 .4s; }
+.shake1 { animation: shk1 .4s; }
+@keyframes shk0 { 20%,60% { transform: translateX(-20rpx); } 40%,80% { transform: translateX(20rpx); } }
+@keyframes shk1 { 20%,60% { transform: translateX(-20rpx); } 40%,80% { transform: translateX(20rpx); } }

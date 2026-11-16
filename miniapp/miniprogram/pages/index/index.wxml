@@ -1,0 +1,54 @@
+<!-- 开始页：点一下才能出声 -->
+<view wx:if="{{!started}}" class="start" bindtap="start">
+  <view class="big">🔤</view>
+  <view class="go">▶ 开始玩</view>
+  <view wx:if="{{noAudio}}" class="warn">还没配置发音文件（config.js 的 AUDIO_BASE），现在会没有声音</view>
+</view>
+
+<!-- 时间到了：休息页 -->
+<view wx:if="{{resting}}" class="rest" bindtap="tapRest">
+  <view class="big">😴</view>
+  <view class="h">🔊 今天的时间用完啦</view>
+  <view class="p">让小眼睛休息一下，明天再来玩吧！</view>
+  <view class="p">{{restText}}</view>
+  <view class="parentLink" catchtap="goParent">👪 家长</view>
+</view>
+
+<view class="top">
+  <view class="tab {{mode=='free'?'on':''}}" data-mode="free" bindtap="setMode">🎹 随便按</view>
+  <view class="tab {{mode=='find'?'on':''}}" data-mode="find" bindtap="setMode">🔍 找字母</view>
+  <view class="tab {{mode=='spell'?'on':''}}" data-mode="spell" bindtap="setMode">✏️ 拼单词</view>
+</view>
+<view class="bar">
+  <text class="left {{low?'low':''}}">{{timeLeft}}</text>
+  <text class="stars">⭐ {{stars}}</text>
+  <view class="tool" bindtap="toggleCase">{{upper?'Aa':'aA'}}</view>
+  <view class="tool" bindtap="toggleMute">{{muted?'🔇':'🔊'}}</view>
+  <view class="tool" bindtap="goParent">👪</view>
+</view>
+
+<view class="stage">
+  <view class="prompt" bindtap="tapPrompt">{{prompt}}</view>
+  <view class="row shake{{shake%2}}">
+    <view wx:if="{{letter}}" class="letter pop{{pop%2}}" style="color:{{letterColor}}" bindtap="tapLetter">{{letter}}</view>
+    <view class="pic pop{{pop%2}} {{pic.length>4?'many':''}}" bindtap="tapWord">{{pic}}</view>
+  </view>
+  <view wx:if="{{tiles.length}}" class="tiles shake{{shake%2}}">
+    <view wx:for="{{tiles}}" wx:key="index" class="tile {{item.cls}}" style="{{item.bg?'background:'+item.bg:''}}" data-k="{{item.key}}" bindtap="tapTile">{{item.c}}</view>
+  </view>
+  <view class="word" bindtap="tapWord">
+    <block wx:if="{{result && result.part.hl}}">{{result.part.pre}}<text class="weak">{{result.part.hl}}</text>{{result.part.post}}</block>
+    <block wx:else>{{parts.pre}}<text class="hl" style="color:{{letterColor}}">{{parts.hl}}</text>{{parts.post}}</block>
+  </view>
+  <view class="cn">{{cn}}</view>
+  <view wx:if="{{result}}" class="result">{{result.starsTxt}}</view>
+  <view wx:if="{{mic!='hide'}}" class="mic {{mic}}" bindtap="followMe">
+    {{mic=='rec' ? '🔴 正在听你读…' : mic=='busy' ? '🎧 …' : '🎤 跟我读'}}
+  </view>
+</view>
+
+<view class="kb">
+  <view wx:for="{{keys}}" wx:for-item="row" wx:key="index" class="krow">
+    <view wx:for="{{row}}" wx:key="k" class="k {{item.hint?'hint':''}} {{down==item.k?'down':''}}" data-k="{{item.k}}" bindtap="tapKey">{{item.label}}</view>
+  </view>
+</view>

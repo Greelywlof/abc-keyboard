@@ -154,7 +154,7 @@
 <!-- 时间到了：休息页 -->
 <div id="rest" hidden>
   <div class="big">😴</div>
-  <h2>今天的时间用完啦</h2>
+  <h2>🔊 今天的时间用完啦</h2>
   <p>让小眼睛休息一下，明天再来玩吧！</p>
   <div class="restStats" id="restStats"></div>
 </div>
@@ -258,7 +258,9 @@ function speak(text, rate=0.8, zh="", done){
 const ZH = { zh_free:"按键盘上的任何一个字母吧！", zh_find:"找一找，这个字母在哪里？", zh_try:"不对哦，看看亮起来的那个键！", zh_great:"太棒啦！",
   zh_spell:"跟着屏幕，把这个单词一个一个敲出来！", zh_ye:"耶！",
   zh_follow:"听一听，跟我读！", zh_yourturn:"该你读啦！", zh_hear:"听听你读的。",
-  zh_1min:"还可以玩一分钟哦！", zh_rest:"今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！" };
+  zh_1min:"还可以玩一分钟哦！", zh_rest:"今天的时间用完啦，让小眼睛休息一下，明天再来玩吧！",
+  zh_today:"今天你拼对了", zh_words_end:"个单词，真棒！", zh_many:"好多好多" };
+const zhText = c => ZH[c] || (/^zh_n_\d+$/.test(c) ? c.slice(5) : "");  // 数字直接给浏览器读
 // 优先播放 audio/ 里 MiniMax 生成的 mp3（按顺序连播）；文件缺失或播不了，就用浏览器语音读 text
 let playing=null, playToken=0;
 // 返回一个 Promise：整串播完（或被新的一句打断）时结束，跟读要等示范读完再录
@@ -270,7 +272,7 @@ function say(clips, text, rate){
     if (playing){ playing.pause(); playing=null; }
     if ("speechSynthesis" in window) speechSynthesis.cancel();
     let i=0, fell=false;
-    const zh = clips.filter(c=>ZH[c]).map(c=>ZH[c]).join("");
+    const zh = clips.map(zhText).join("");
     const fallback=()=>{ if (fell || token!==playToken) return fin(); fell=true; speak(text, rate, zh, fin); };
     const next=()=>{
       if (token!==playToken || i>=clips.length) return fin();
@@ -517,8 +519,11 @@ function goRest(){
   const t = today();
   $("restStats").textContent = `今天拼对 ${t.words.length} 个单词，按了 ${t.letters} 个字母，跟读 ${t.reads} 次 ⭐`;
   $("rest").hidden = false;
-  say(["zh_rest"], "");
+  say(restClips(t.words.length), "");
 }
+// 休息页读的话：「时间用完啦…」+「今天你拼对了 N 个单词，真棒！」；孩子不认字，点休息页任何地方再读一遍
+function restClips(n){ return n ? ["zh_rest", "zh_today", n <= 50 ? `zh_n_${n}` : "zh_many", "zh_words_end"] : ["zh_rest"]; }
+$("rest").addEventListener("click", ()=> say(restClips(today().words.length), ""));
 function checkRest(){ // 换了一天、或家长加了时间，就解除休息
   if (allowSec() - today().sec > 0){ resting = false; $("rest").hidden = true; warned1 = false; }
   else goRest();
@@ -635,7 +640,10 @@ document.querySelectorAll("header .tab").forEach(t=>t.addEventListener("click",(
   tilesEl.innerHTML=""; spell=null; target=null;
   if (mode==="find"){ newTarget(); }
   else if (mode==="spell"){ newSpell(); }
-  else { promptEl.textContent="🔊 按键盘上的任何字母吧！"; freePress("A"); }
+  else {
+    promptEl.textContent="🔊 按键盘上的任何字母吧！"; freePress("A");
+    setTimeout(()=>{ if (mode==="free" && !recBusy) say(["zh_free"], ""); }, 2600); // 提示语也读出来
+  }
 }));
 $("caseBtn").addEventListener("click",e=>{
   upper=!upper; e.target.textContent = upper ? "Aa" : "aA"; refreshKeys();

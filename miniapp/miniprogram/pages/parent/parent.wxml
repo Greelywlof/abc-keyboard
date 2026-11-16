@@ -1,0 +1,40 @@
+<view class="wrap">
+  <view wx:if="{{!ok}}" class="gate">
+    <view class="h">👪 家长入口</view>
+    <view>请回答：<text class="q">{{q}}</text></view>
+    <input class="in" type="number" value="{{ans}}" bindinput="input" bindconfirm="check" focus placeholder="{{wrong?'不对哦':''}}" />
+    <view class="btn" bindtap="check">进入</view>
+  </view>
+
+  <block wx:else>
+    <view class="h">📊 今天</view>
+    <view class="cards">
+      <view wx:for="{{cards}}" wx:key="s" class="card"><view class="n">{{item.n}}</view><view class="s">{{item.s}}</view></view>
+    </view>
+    <view class="muted">{{words}}</view>
+
+    <view class="h2">最近 7 天拼对的单词</view>
+    <view class="bars">
+      <view wx:for="{{bars}}" wx:key="label" class="bar {{item.today?'today':''}}">
+        <view class="num">{{item.n}}</view>
+        <view class="col" style="height:{{item.h}}%"></view>
+        <view class="lab">{{item.label}}</view>
+      </view>
+    </view>
+
+    <view class="h2">🎤 今天的跟读评测</view>
+    <view wx:if="{{!evals.length}}" class="muted">还没有评测。录音评完就删，这里只记分数。</view>
+    <view wx:for="{{evals}}" wx:key="index" class="ev">
+      <text class="t">{{item.time}}</text><text class="w">{{item.word}}</text><text>{{item.stars}}</text>
+      <text class="sc">{{item.total}} 分</text><text wx:if="{{item.weak}}" class="weak">要练：{{item.weak}}</text>
+    </view>
+    <view class="muted">今天还能评测 {{evalLeft}} 次（在 config.js 里改上限）。分数供参考：4 岁孩子读单个单词，评测会有波动。</view>
+
+    <view class="h2">⏱ 每天能玩多久</view>
+    <view class="limits">
+      <view wx:for="{{limits}}" wx:key="*this" class="lim {{item==limit?'on':''}}" data-m="{{item}}" bindtap="setLimit">{{item}} 分钟</view>
+      <view class="lim" bindtap="plus5">今天再加 5 分钟</view>
+    </view>
+    <view class="muted">到时间后出现休息页，键盘不再响应，第二天自动恢复。时间和统计存在这台手机上。</view>
+  </block>
+</view>
